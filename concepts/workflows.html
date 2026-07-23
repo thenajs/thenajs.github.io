@@ -68,6 +68,40 @@
       de segurança.
     </p>
 
+    <h3>Parar quando o agente responde</h3>
+    <p>
+      No padrão <b>ReAct</b> (repetir enquanto o agente usa tools, parar quando ele
+      responde sem tool), você não precisa de hook nenhum: o runtime grava um resumo
+      do último turno em <code>ctx.turn</code>, e o <code>until</code> pronto
+      <code>untilAnswered</code> lê isso.
+    </p>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">react.workflow.ts</span></div>
+<pre><code><span class="kw">import</span> { Workflow, loop, untilAnswered } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+
+<span class="kw">@Workflow</span>({
+  steps: [
+    loop({ steps: [ExplorerAgent], until: untilAnswered, maxIterations: 8 }),
+  ],
+})
+<span class="kw">export class</span> ReactWorkflow {}</code></pre>
+    </div>
+    <p>
+      O <code>ExplorerAgent</code> fica <b>limpo</b> (<code>export class ExplorerAgent {}</code>)
+      — sem <code>afterResponse</code>, sem flag. Para condições próprias, leia
+      <code>ctx.turn</code> direto:
+    </p>
+    <ul>
+      <li><code>ctx.turn.calledTool</code> — o turno executou uma tool?</li>
+      <li><code>ctx.turn.toolName</code> — qual tool o modelo chamou;</li>
+      <li><code>ctx.turn.response</code> — o texto da resposta final do turno.</li>
+    </ul>
+    <div class="note">
+      <code>untilAnswered</code> é para loops de <b>um</b> agente. Dentro de
+      <code>parallel</code>, vários agentes gravam <code>ctx.turn</code> e a última
+      escrita vence — nesse caso escreva um <code>until</code> próprio.
+    </div>
+
     <h3>Paralelo: cuidado com a saída</h3>
     <div class="note">
       No <code>parallel</code>, os agentes rodam sobre a <b>mesma</b> entrada e
