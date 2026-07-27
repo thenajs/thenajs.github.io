@@ -50,6 +50,20 @@
       (não confiável) do modelo e o seu código — mantenha-o estrito.
     </p>
 
+    <div class="note warn">
+      <b>⚠️ O <code>execute</code> recebe só os argumentos.</b> Ele não enxerga o
+      <code>ctx</code>, o <code>history</code> nem o <code>memory</code> do
+      workflow — só o objeto já validado pelo schema. Injeção acontece no
+      <b>construtor</b> (e a única dependência injetável é o
+      <code>WorkflowRuntime</code>).
+      <br /><br />
+      Para dar contexto a uma tool, há três caminhos: colocar o dado
+      <b>nos args</b> (o modelo preenche), rederivá-lo <b>dentro</b> da tool
+      (ler o disco, consultar um serviço), ou usar
+      <a href="workflow-as-tool.html">Workflow como Tool</a> e passar contexto
+      explícito no <code>memory</code> do filho.
+    </div>
+
     <h3>Onde a tool executa</h3>
     <p>
       Quando o modelo decide chamar uma tool, o engine encontra a tool pelo

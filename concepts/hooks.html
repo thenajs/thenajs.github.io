@@ -42,6 +42,40 @@
       retornou <code>undefined</code> → <b>mantém</b> o original.
     </div>
 
+    <h3>Assinaturas exatas</h3>
+    <p>
+      Vale copiar daqui: os tipos de entrada e de retorno não são simétricos, e
+      alguns nomes contrariam a intuição de quem vem da API da OpenAI.
+    </p>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">AgentHooks</span></div>
+<pre><code>beforePrompt(prompt: string, ctx: AgentContext): string | void
+beforeTool(call: ToolCall, ctx: AgentContext): ToolCall | void
+afterTool(result: ToolResult, ctx: AgentContext): string | ToolOutput | void
+afterResponse(response: string, ctx: AgentContext): string | void
+onError(error: Error, ctx: AgentContext): string | void
+
+<span class="cm">// todos aceitam Promise&lt;…&gt; também</span>
+
+ToolCall   = { name: string; args: unknown }
+ToolResult = { name: string; args: unknown; output: string; isError?: boolean }
+ToolOutput = { content: string; isError?: boolean; data?: unknown }</code></pre>
+    </div>
+
+    <div class="note warn">
+      <b>⚠️ Duas pegadinhas de nome.</b><br />
+      O <code>ToolCall</code> dos hooks usa <code>args</code>, não
+      <code>arguments</code>. Existe um <b>outro</b> tipo também chamado
+      <code>ToolCall</code>, o do engine
+      (<code>{ id, name, arguments, source }</code>), que é o que aparece no
+      <code>ctx.turn</code> e no report — se o autocomplete importar o errado, os
+      campos não batem.
+      <br /><br />
+      E o <code>afterTool</code> recebe um <code>ToolResult</code> mas
+      <b>não</b> devolve um: devolva uma <code>string</code> (troca só o texto e
+      preserva o <code>isError</code>) ou um <code>ToolOutput</code> completo.
+    </div>
+
     <h3>Exemplo</h3>
     <div class="code-card">
       <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">com hooks</span></div>

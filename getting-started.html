@@ -188,10 +188,33 @@ Use a tool `shell` para inspecionar diretórios e responda de forma objetiva.</c
 
 <span class="kw">export class</span> LocalOllamaProvider <span class="kw">extends</span> OllamaProvider {
   <span class="kw">constructor</span>() {
-    <span class="kw">super</span>({ host: <span class="st">"http://localhost:11434"</span>, model: <span class="st">"qwen2.5-coder:7b"</span> });
+    <span class="kw">super</span>({
+      host: <span class="st">"http://localhost:11434"</span>,
+      model: <span class="st">"qwen2.5-coder:7b"</span>,
+      <span class="cm">// para tool calling, comece em temperature: 0</span>
+      sampling: { temperature: 0, seed: 42 },
+    });
   }
 }</code></pre>
       <p>Também há o <code>OpenAIProvider</code> (<code>{ apiKey, model }</code>). O agente referencia a <b>classe</b> do provider — sem hardcode de credenciais.</p>
+
+      <div class="note">
+        <b>Comece em <code>temperature: 0</code>.</b> Agente não é chat: você quer
+        que a mesma entrada produza a mesma decisão de tool. Com a temperatura
+        padrão, execuções idênticas divergem e fica impossível saber se uma
+        mudança melhorou o agente ou se foi sorte.
+        <br /><br />
+        Medimos num <code>qwen2.5-coder:1.5b</code>, mesma pergunta 3 vezes: sem
+        <code>sampling</code>, <b>3 respostas diferentes</b>; com
+        <code>temperature: 0</code> + <code>seed</code>, <b>3 idênticas</b>.
+        O <code>seed</code> só tem efeito junto da temperatura baixa.
+        Depois que o agente estiver estável, suba a temperatura onde quiser
+        variedade — dá para fazer isso por agente, com
+        <code>@Agent({ sampling })</code>.
+        <br /><br />
+        Detalhes e a tabela de equivalência por provider em
+        <a href="concepts/providers.html">Conceitos · Providers</a>.
+      </div>
 
       <h2 id="workflows">Workflows</h2>
       <p>

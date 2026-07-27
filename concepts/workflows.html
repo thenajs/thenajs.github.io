@@ -59,6 +59,46 @@
       pelo <code>input</code>/<code>memory</code> do <code>run</code>.
     </p>
 
+    <div class="note warn">
+      <b>⚠️ A saída de um step entra no próximo agente como fala dele.</b><br />
+      O turno de um agente é anexado ao <code>history</code> com
+      <code>role: "assistant"</code>. Como o próximo agente lê o mesmo
+      <code>history</code>, ele recebe aquilo como se <b>ele próprio</b> já
+      tivesse respondido — e um modelo que "já falou" tende a devolver vazio ou
+      a encerrar cedo.
+      <br /><br />
+      É o erro mais silencioso do framework, e aparece justamente no arranjo mais
+      natural: <code>steps: [PlannerAgent, loop([OrchestratorAgent])]</code>. Se a
+      saída de um step é <b>contexto</b> (um plano, um resumo, uma pesquisa), e
+      não fala, promova-a — veja a receita abaixo.
+    </div>
+
+    <h3>Receita: a saída de um step como contexto, não como fala</h3>
+    <p>
+      O framework não decide isso por você — a semântica certa depende do fluxo.
+      Os pontos de engate são o hook <code>afterResponse</code> e o
+      <code>ctx.state</code>, que é público. Promover para
+      <code>memory</code> faz o conteúdo virar uma mensagem <code>system</code> no
+      topo do prompt, que é o lugar de contexto durável:
+    </p>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">planner.agent.ts</span></div>
+<pre><code><span class="kw">export class</span> PlannerAgent <span class="kw">implements</span> AgentHooks {
+  afterResponse(plano: string, ctx: AgentContext) {
+    <span class="cm">// tira o turno do transcript…</span>
+    ctx.state.set(<span class="st">"history"</span>, ctx.state.history.slice(0, -1));
+    <span class="cm">// …e promove para contexto durável (vira `system` no topo)</span>
+    ctx.state.append(<span class="st">"memory"</span>, <span class="st">`Plano a seguir:\n${plano}`</span>);
+    ctx.plan = plano;
+  }
+}</code></pre>
+    </div>
+    <p>
+      A outra saída, quando o passo precisa de <b>histórico próprio</b> e não só
+      de uma saída limpa, é isolá-lo por completo —
+      veja <a href="workflow-as-tool.html">Workflow como Tool</a>.
+    </p>
+
     <h3>Condição do loop</h3>
     <p>
       O <code>until</code> lê o <code>ctx</code>. Para pará-lo por lógica (e não só
@@ -94,8 +134,35 @@
     <ul>
       <li><code>ctx.turn.calledTool</code> — o turno executou uma tool?</li>
       <li><code>ctx.turn.toolName</code> — qual tool o modelo chamou;</li>
+      <li><code>ctx.turn.toolError</code> — a tool sinalizou falha;</li>
+      <li><code>ctx.turn.toolCallSource</code> — <code>"native"</code> ou <code>"rescued"</code>;</li>
       <li><code>ctx.turn.response</code> — o texto da resposta final do turno.</li>
     </ul>
+
+    <div class="note warn">
+      <b>⚠️ <code>untilAnswered</code> trata resposta vazia como resposta.</b><br />
+      Ele pergunta uma coisa só: "não chamou tool?". Um modelo local que devolve
+      string vazia — o que acontece com frequência — encerra o loop
+      <b>com sucesso aparente</b>, e a tarefa morre em silêncio.
+      <br /><br />
+      Ele também não distingue <b>"terminou"</b> de <b>"escreveu o que faria em
+      vez de chamar a tool"</b>: os dois produzem <code>calledTool: false</code>.
+      Para tarefas de várias etapas, escreva o seu:
+    </div>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">until próprio</span></div>
+<pre><code><span class="kw">import</span> { turnOf } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+
+<span class="cm">// só encerra se respondeu E disse alguma coisa</span>
+<span class="kw">const</span> until = (ctx: WorkflowContext) =&gt; {
+  <span class="kw">const</span> t = turnOf(ctx);
+  <span class="kw">return</span> !!t &amp;&amp; !t.calledTool &amp;&amp; !!t.response?.trim();
+};
+
+<span class="cm">// mais estrito: só encerra quando a tarefa foi marcada como feita</span>
+<span class="kw">const</span> untilConcluido = (ctx: WorkflowContext) =&gt; ctx.done === <span class="kw">true</span>;</code></pre>
+    </div>
+
     <div class="note">
       <code>untilAnswered</code> é para loops de <b>um</b> agente. Dentro de
       <code>parallel</code>, vários agentes gravam <code>ctx.turn</code> e a última
@@ -185,7 +252,7 @@
 <footer class="footer">
   <div class="wrap">
     <span>ThenaJS</span>
-    <span><a href="providers.html">← Providers</a> · <a href="state-memory.html">Estado &amp; memória →</a></span>
+    <span><a href="providers.html">← Providers</a> · <a href="workflow-as-tool.html">Workflow como Tool →</a></span>
   </div>
 </footer>
 

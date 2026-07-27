@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Workflow como Tool — ThenaJS</title>
+<meta name="description" content="Isolamento de contexto no ThenaJS: uma tool dispara um workflow inteiro, com estado próprio, e devolve uma única string ao agente pai." />
+<link rel="icon" href="../assets/logo.png" />
+<link rel="stylesheet" href="../assets/docs.css" />
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="ThenaJS" /><b>ThenaJS</b></a>
+    <span class="spacer"></span>
+    <a class="link" href="../getting-started.html">Documentação</a>
+    <a class="link" href="index.html">Conceitos</a>
+    <a class="link" href="https://github.com/thenajs/ThenaJS">GitHub</a>
+  </div>
+</header>
+
+<section>
+  <div class="wrap" style="max-width:840px;padding-top:32px">
+    <p><a href="index.html">← Conceitos</a></p>
+    <h2 class="section-title">Workflow como Tool</h2>
+    <p class="section-sub">
+      Uma <a href="tools.html">tool</a> pode disparar um workflow inteiro. O filho
+      roda com <b>estado próprio</b> e devolve <b>uma string</b> ao pai — é assim
+      que se consegue isolamento de contexto sem escrever nada para isso.
+    </p>
+
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">o que acontece</span></div>
+<pre><code>agente pai  (histórico enxuto)
+ │
+ └─ tool ──▶ workflow isolado  (StateManager próprio)
+              ├─ 10 turnos de tentativa e erro
+              ├─ tools, loops, outros agentes
+              └─ devolve UMA string ao pai
+                          │
+     ◀────────────────────┘
+   o pai vê só o resultado, nada do caminho</code></pre>
+    </div>
+
+    <p>
+      Isso importa muito com <b>modelo pequeno</b>: o custo de um agente não é só
+      token, é atenção. Dez turnos de tentativa e erro no histórico do pai
+      degradam as decisões dele. Passando pelo filho, o pai recebe uma linha.
+    </p>
+
+    <h3>Como se escreve</h3>
+    <p>
+      O construtor da tool recebe o <code>WorkflowRuntime</code> injetado — é a
+      única dependência injetável, e toda tool a recebe.
+    </p>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">deploy.tool.ts</span></div>
+<pre><code><span class="kw">import</span> { Tool, WorkflowRuntime } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+<span class="kw">import</span> { DeployWorkflow } <span class="kw">from</span> <span class="st">"../workflows/deploy.workflow.js"</span>;
+
+<span class="kw">@Tool</span>({
+  name: <span class="st">"deploy"</span>,
+  description: <span class="st">"Executa o processo de deploy e devolve o resultado."</span>,
+  schema: z.object({ repository: z.string() }),
+})
+<span class="kw">export class</span> DeployTool {
+  <span class="kw">constructor</span>(<span class="kw">private readonly</span> runtime: WorkflowRuntime) {}
+
+  <span class="kw">async</span> execute(input: { repository: string }) {
+    <span class="cm">// workflow completo: estado novo, histórico novo</span>
+    <span class="kw">return this</span>.runtime.run(DeployWorkflow, { input });
+  }
+}</code></pre>
+    </div>
+
+    <h3>Step ou workflow-tool? O guia de decisão</h3>
+    <p>
+      É a escolha arquitetural central do framework, e as duas formas parecem
+      equivalentes até a primeira vez que você é mordido pela diferença.
+    </p>
+
+    <div class="content">
+    <table>
+      <thead>
+        <tr><th></th><th>Sub-agente como <b>step</b></th><th>Sub-agente como <b>workflow-tool</b></th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Histórico</b></td>
+          <td>compartilhado com o pai</td>
+          <td>próprio, isolado</td>
+        </tr>
+        <tr>
+          <td><b>A saída vira</b></td>
+          <td>mensagem <code>assistant</code> no transcript</td>
+          <td>observação <code>tool</code>, como qualquer resultado</td>
+        </tr>
+        <tr>
+          <td><b>Quem decide se roda</b></td>
+          <td>você, na ordem dos <code>steps</code></td>
+          <td>o modelo, chamando (ou não) a tool</td>
+        </tr>
+        <tr>
+          <td><b>Custo de contexto no pai</b></td>
+          <td>todos os turnos do filho</td>
+          <td>uma string</td>
+        </tr>
+        <tr>
+          <td><b>Use quando</b></td>
+          <td>as etapas são uma conversa só e o pai precisa ver o caminho</td>
+          <td>a subtarefa é ruidosa, ou o pai só precisa do resultado</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="note warn">
+      <b>⚠️ O modo mais comum de errar isso</b> é montar
+      <code>steps: [PlannerAgent, loop([OrchestratorAgent])]</code> esperando que o
+      plano seja <i>contexto</i> para o orchestrator. Como step, ele vira
+      <b>fala do orchestrator</b> — que então acha que já respondeu. Ou promova o
+      plano a <code>memory</code> (veja
+      <a href="workflows.html">Workflows</a>) ou isole o planner atrás de uma tool.
+    </div>
+
+    <h3>O que o filho enxerga</h3>
+    <p>
+      O <code>runtime.run</code> cria um <code>StateManager</code> novo. O filho
+      começa com o <code>input</code> que a tool passou como primeiro turno de
+      usuário — e nada do histórico do pai. Se ele precisar de algum contexto do
+      pai, isso tem que ir <b>explicitamente</b>, pelo <code>input</code> ou pelo
+      <code>memory</code>:
+    </p>
+    <div class="code-card">
+<pre><code><span class="kw">return this</span>.runtime.run(DeployWorkflow, {
+  input: { message: <span class="st">`Faça o deploy de ${input.repository}`</span> },
+  memory: { ambiente: <span class="st">"staging"</span>, autor: <span class="st">"ci-bot"</span> },
+});</code></pre>
+    </div>
+
+    <h3>Report e orçamento atravessam o isolamento de formas opostas</h3>
+    <p>
+      <b>O report aninha.</b> A execução do filho aparece como subárvore dentro do
+      nó <code>tool</code> do pai, então você não perde a visibilidade que abriu
+      mão no contexto:
+    </p>
+    <div class="code-card">
+<pre><code>workflow WPai
+  loop
+    agent PaiAgent
+      chat
+        tool sub
+          workflow WFilho      <span class="cm">← o filho aparece aqui</span>
+            agent FilhoAgent
+              chat</code></pre>
+    </div>
+
+    <div class="note warn">
+      <b>⚠️ O orçamento não atravessa.</b> Cada <code>run</code> tem o próprio
+      contador. Um <code>budget</code> no pai <b>não</b> soma o consumo dos
+      workflows-filhos — no exemplo acima o pai reporta 2 chamadas ao modelo,
+      não 3.
+      <br /><br />
+      Se o subworkflow é caro, passe um <code>budget</code> também no
+      <code>runtime.run</code> dele. Um teto no pai sozinho não limita o total.
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>ThenaJS</span>
+    <span><a href="workflows.html">← Workflows</a> · <a href="state-memory.html">Estado &amp; memória →</a></span>
+  </div>
+</footer>
+
+</body>
+</html>
