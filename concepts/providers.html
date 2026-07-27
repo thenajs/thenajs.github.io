@@ -44,6 +44,79 @@
       credenciais ficam num lugar só, fora dos agentes.
     </p>
 
+    <h3>Parâmetros de amostragem</h3>
+    <p>
+      <code>sampling</code> é um shape neutro que cada provider traduz para as
+      chaves nativas. Nada tem default: o que você não informar não é enviado, e
+      o modelo mantém o comportamento dele. Para iterar determinismo, o par
+      <code>temperature: 0</code> + <code>seed</code> é o ponto de partida.
+    </p>
+
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">providers/ollama.provider.ts</span></div>
+<pre><code><span class="kw">export class</span> LocalOllamaProvider <span class="kw">extends</span> OllamaProvider {
+  <span class="kw">constructor</span>() {
+    <span class="kw">super</span>({
+      host: <span class="st">"http://localhost:11434"</span>,
+      model: <span class="st">"qwen2.5-coder:7b"</span>,
+      sampling: { temperature: 0, seed: 42, numCtx: 8192 },
+      raw: { keep_alive: <span class="st">"30m"</span> },
+    });
+  }
+}</code></pre>
+    </div>
+
+    <div class="content">
+    <table>
+      <thead><tr><th><code>SamplingParams</code></th><th>Ollama</th><th>OpenAI</th></tr></thead>
+      <tbody>
+        <tr><td><code>temperature</code></td><td><code>options.temperature</code></td><td><code>temperature</code></td></tr>
+        <tr><td><code>topP</code></td><td><code>options.top_p</code></td><td><code>top_p</code></td></tr>
+        <tr><td><code>seed</code></td><td><code>options.seed</code></td><td><code>seed</code></td></tr>
+        <tr><td><code>maxTokens</code></td><td><code>options.num_predict</code></td><td><code>max_tokens</code></td></tr>
+        <tr><td><code>stop</code></td><td><code>options.stop</code></td><td><code>stop</code></td></tr>
+        <tr><td><code>topK</code></td><td><code>options.top_k</code></td><td>—</td></tr>
+        <tr><td><code>numCtx</code></td><td><code>options.num_ctx</code></td><td>—</td></tr>
+        <tr><td><code>repeatPenalty</code></td><td><code>options.repeat_penalty</code></td><td>—</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <p>
+      Um agente pode sobrescrever chave a chave com
+      <code>@Agent({ sampling })</code> — útil para deixar parte do fluxo
+      determinística e parte criativa usando o mesmo provider. Para o que o shape
+      neutro não cobre, <code>raw</code> mescla chaves cruas no body.
+    </p>
+
+    <h3>Custo por tokens</h3>
+    <p>
+      Ollama e OpenAI já têm o <code>usage</code> lido, então tokens aparecem no
+      report sem configuração. Custo exige informar o preço — não há tabela
+      embutida, que envelheceria em silêncio:
+    </p>
+    <div class="code-card">
+<pre><code><span class="kw">super</span>({ host, model, costPer1kTokens: { input: 0.0005, output: 0.0015 } });</code></pre>
+    </div>
+
+    <h3>Tool calls emitidas como texto</h3>
+    <p>
+      Quando o provider não devolve tool calls nativas, o runtime tenta extrair a
+      chamada do texto da resposta — o caso comum em modelos locais. São
+      reconhecidos <code>&lt;tool_call&gt;…&lt;/tool_call&gt;</code>, blocos
+      markdown e os envelopes que os modelos de fato emitem:
+      <code>{name, arguments}</code>, <code>{name, parameters}</code>,
+      <code>{tool, args}</code>, <code>{function:{…}}</code>, argumentos como
+      string JSON.
+    </p>
+    <p>
+      O nó <code>chat</code> do report registra
+      <code>toolCallSource: "native" | "rescued"</code>, então dá para medir o
+      quanto um modelo depende do resgate. <code>rescueToolCalls: false</code>
+      desliga o fallback — o texto vira resposta final, expondo que o modelo não
+      está usando o formato nativo em vez de mascarar.
+    </p>
+
     <h3>Baseado em mensagens</h3>
     <p>
       O contrato do provider é <code>chat({ tools, messages })</code>, que devolve
@@ -56,10 +129,12 @@
     <h3>Escrevendo um provider</h3>
     <p>
       Qualquer provider estende <code>Providers</code> e implementa o
-      <code>chatInternal(tools, messages)</code> (a chamada crua ao modelo). A
-      classe base cuida do resto: extrair a tool call, validar o schema e executar
-      a tool. Para um novo backend, basta traduzir <code>messages</code> para o
-      formato da API e devolver o conteúdo.
+      <code>chatInternal(tools, messages, sampling?)</code> (a chamada crua ao
+      modelo). A classe base cuida do resto: extrair a tool call, validar o
+      schema e executar a tool. Para um novo backend, basta traduzir
+      <code>messages</code> para o formato da API, mapear o
+      <code>sampling</code> e devolver o conteúdo — mais o
+      <code>usage</code>, se a API o reportar.
     </p>
     <div class="note">
       Use um modelo pequeno (ex.: <code>qwen2.5:1.5b</code>) para iterar rápido e

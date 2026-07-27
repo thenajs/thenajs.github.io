@@ -33,7 +33,7 @@
     <ul>
       <li><b>agente</b> (a classe) — passo <b>sequencial</b>; a saída de um alimenta o próximo;</li>
       <li><code>parallel([...])</code> — passos <b>concorrentes</b> sobre o mesmo contexto;</li>
-      <li><code>loop({ steps, until, maxIterations })</code> — <b>repete</b> até <code>until(ctx)</code> ou o limite.</li>
+      <li><code>loop({ steps, until, maxIterations, onExhausted })</code> — <b>repete</b> até <code>until(ctx)</code> ou o limite.</li>
     </ul>
 
     <div class="code-card">
@@ -100,6 +100,69 @@
       <code>untilAnswered</code> é para loops de <b>um</b> agente. Dentro de
       <code>parallel</code>, vários agentes gravam <code>ctx.turn</code> e a última
       escrita vence — nesse caso escreva um <code>until</code> próprio.
+    </div>
+
+    <h3>Quando o loop estoura</h3>
+    <p>
+      Parar por <code>maxIterations</code> é diferente de convergir, e o
+      framework diz qual dos dois aconteceu — sem precisar inferir contando nós
+      filhos no report.
+    </p>
+    <div class="code-card">
+<pre><code>loop({
+  steps: [ExplorerAgent],
+  until: untilAnswered,
+  maxIterations: 10,
+  onExhausted: (ctx, n) =&gt; console.warn(<span class="st">`loop estourou em ${n} iterações`</span>),
+})</code></pre>
+    </div>
+    <ul>
+      <li><code>ctx.loop</code> — <code>{ iterations, exhausted, maxIterations }</code>;</li>
+      <li><code>wasExhausted(ctx)</code> — helper para ler isso num <code>until</code> ou hook;</li>
+      <li>o nó <code>loop</code> do report registra <code>iterations</code> e <code>exhausted</code>.</li>
+    </ul>
+    <div class="note">
+      Em loops aninhados <code>ctx.loop</code> sofre last-writer-wins — para o
+      dado aninhado, leia a árvore do <a href="report.html">report</a>.
+    </div>
+
+    <h3>Orçamentos de run</h3>
+    <p>
+      <code>maxIterations</code> limita um loop; <code>budget</code> limita a
+      <b>execução inteira</b>. Sem <code>budget</code>, nada é medido nem checado.
+    </p>
+    <div class="code-card">
+<pre><code><span class="kw">await</span> app.run({
+  input: { message: <span class="st">"faça o deploy"</span> },
+  budget: {
+    maxDurationMs: 5 * 60_000,
+    maxChatCalls: 30,
+    maxToolCalls: 40,
+    maxTokens: 200_000,
+    maxCostUsd: 1.5,
+    mode: <span class="st">"stop"</span>, <span class="cm">// ou "throw"; default "stop"</span>
+    onExceeded: (i) =&gt; console.warn(<span class="st">`orçamento estourado: ${i.reason}`</span>),
+  },
+});</code></pre>
+    </div>
+    <ul>
+      <li><b><code>"stop"</code></b> encerra graciosamente: os passos seguintes são pulados e a run devolve o <code>output</code> que já tinha;</li>
+      <li><b><code>"throw"</code></b> lança <code>BudgetExceededError</code>.</li>
+    </ul>
+    <p>
+      Os limites são conferidos <b>entre unidades de trabalho</b> (um turno = uma
+      chamada ao modelo + no máximo uma tool), então o consumo pode passar do
+      teto dentro do turno em que ele é atingido. <code>maxTokens</code> e
+      <code>maxCostUsd</code> dependem do que o
+      <a href="providers.html">provider</a> reporta.
+    </p>
+    <div class="note">
+      O consumo acumulado fica em <code>ctx.budget</code> — <code>chatCalls</code>,
+      <code>toolCalls</code>, <code>tokens</code>, <code>costUsd</code>,
+      <code>elapsedMs</code>. É a partir daí que se escreve política própria
+      (cortar chamada repetida, heurística de parada) num
+      <a href="hooks.html"><code>beforeTool</code></a> ou num <code>until</code>,
+      sem o framework opinar sobre ela.
     </div>
 
     <h3>Paralelo: cuidado com a saída</h3>

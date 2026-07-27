@@ -36,9 +36,16 @@
   provider: LocalOllamaProvider,   <span class="cm">// quem fala com o modelo</span>
   tools: [ShellTool],              <span class="cm">// ações disponíveis</span>
   prompt: <span class="st">"./explorer.agent.md"</span>,   <span class="cm">// obrigatório</span>
+  sampling: { temperature: 0 },    <span class="cm">// opcional: sobrescreve o do provider</span>
 })
 <span class="kw">export class</span> ExplorerAgent {}</code></pre>
     </div>
+    <p>
+      O <code>sampling</code> é opcional e sobrescreve, chave a chave, o
+      configurado no <a href="providers.html">provider</a> — dá para deixar um
+      agente determinístico e outro criativo usando o mesmo provider. Sem ele,
+      nada é enviado e o modelo mantém o comportamento padrão.
+    </p>
 
     <h3>Por que o prompt fica no markdown</h3>
     <p>

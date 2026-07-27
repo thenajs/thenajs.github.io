@@ -32,7 +32,7 @@
       <tr><th>Hook</th><th>Quando</th><th>Contrato</th></tr>
       <tr><td><code>beforePrompt(prompt, ctx)</code></td><td>antes de enviar ao modelo</td><td>retorna o prompt (transforma)</td></tr>
       <tr><td><code>beforeTool(call, ctx)</code></td><td>antes da tool</td><td>troca os args, ou <code>throw</code> cancela</td></tr>
-      <tr><td><code>afterTool(result, ctx)</code></td><td>depois da tool</td><td>retorno substitui o output</td></tr>
+      <tr><td><code>afterTool(result, ctx)</code></td><td>depois da tool</td><td>string troca o texto (preserva <code>isError</code>); <code>ToolOutput</code> substitui tudo</td></tr>
       <tr><td><code>afterResponse(response, ctx)</code></td><td>na resposta do passo</td><td>retorna a resposta (transforma)</td></tr>
       <tr><td><code>onError(error, ctx)</code></td><td>em erro no fluxo</td><td>retorno vira fallback</td></tr>
     </table>
@@ -64,6 +64,50 @@
       <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">fluxo</span></div>
 <pre><code>beforePrompt → chat [ beforeTool → execute → afterTool ] → afterResponse
                                    (qualquer throw) → onError</code></pre>
+    </div>
+
+    <h3>Padrões que os hooks já resolvem</h3>
+    <p>
+      Duas coisas que parecem pedir API dedicada, mas que ficam melhores em
+      user-land — porque a semântica certa depende do seu fluxo.
+    </p>
+
+    <p>
+      <b>A saída de um passo como contexto, não como fala.</b> Por padrão a
+      resposta de um agente entra no transcript do próximo como mensagem
+      <code>assistant</code>. Para que um plano vire contexto durável, reescreva
+      o history no próprio agente — <code>ctx.state</code> é público:
+    </p>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">planner.agent.ts</span></div>
+<pre><code><span class="kw">export class</span> PlannerAgent <span class="kw">implements</span> AgentHooks {
+  afterResponse(plano: string, ctx: AgentContext) {
+    <span class="cm">// tira o turno do transcript e promove para memória (vira `system` no topo)</span>
+    ctx.state.set(<span class="st">"history"</span>, ctx.state.history.slice(0, -1));
+    ctx.state.append(<span class="st">"memory"</span>, <span class="st">`Plano:\n${plano}`</span>);
+    ctx.plan = plano;
+  }
+}</code></pre>
+    </div>
+
+    <p>
+      <b>Cortar uma chamada repetida.</b> <code>beforeTool</code> cancela a
+      execução com um <code>throw</code>; combine com <code>ctx.budget</code>
+      (veja <a href="workflows.html">Orçamentos de run</a>) se quiser uma
+      heurística que dependa do consumo:
+    </p>
+    <div class="code-card">
+<pre><code><span class="kw">export class</span> ExplorerAgent <span class="kw">implements</span> AgentHooks {
+  <span class="kw">private</span> vistas = <span class="kw">new</span> Set&lt;string&gt;();
+
+  beforeTool(call: ToolCall) {
+    <span class="kw">const</span> assinatura = <span class="st">`${call.name}:${JSON.stringify(call.args)}`</span>;
+    <span class="kw">if</span> (<span class="kw">this</span>.vistas.has(assinatura)) {
+      <span class="kw">throw new</span> Error(<span class="st">`Já chamei ${call.name} com esses argumentos.`</span>);
+    }
+    <span class="kw">this</span>.vistas.add(assinatura);
+  }
+}</code></pre>
     </div>
 
     <h3>Escape hatch</h3>

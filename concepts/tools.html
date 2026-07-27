@@ -58,6 +58,34 @@
       <code>if</code> no agente — o provider cuida disso.
     </p>
 
+    <h3>Sinalizando falha</h3>
+    <p>
+      Devolver uma <code>string</code> continua sendo o caminho normal. Para
+      marcar que a observação é um erro — sem lançar e sem derrubar a run —
+      devolva um <code>ToolOutput</code>:
+    </p>
+    <div class="code-card">
+<pre><code><span class="kw">async</span> execute({ path }: { path: string }) {
+  <span class="kw">try</span> {
+    <span class="kw">return await</span> readFile(path, <span class="st">"utf8"</span>);
+  } <span class="kw">catch</span> (err) {
+    <span class="kw">return</span> { content: <span class="st">`Falhou: ${(err <span class="kw">as</span> Error).message}`</span>, isError: <span class="kw">true</span> };
+  }
+}</code></pre>
+    </div>
+    <p>
+      O nó <code>tool</code> do report fica <code>status: "error"</code>, o hook
+      <code>afterTool</code> recebe <code>isError</code>, e
+      <code>ctx.turn.toolError</code> fica <code>true</code>. Com isso
+      <code>tool_error_rate</code> é uma contagem de nós, não uma regex sobre o
+      texto de saída.
+    </p>
+    <div class="note">
+      Uma tool que <b>lança</b> continua derrubando a run por padrão. Se preferir
+      que o erro volte ao modelo como observação, ligue a política no config:
+      <code>{ toolErrors: "observe" }</code> (default: <code>"throw"</code>).
+    </div>
+
     <h3>Injeção de dependência</h3>
     <p>
       O construtor da tool pode receber o <code>WorkflowRuntime</code> — assim uma
