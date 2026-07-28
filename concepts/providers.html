@@ -99,6 +99,71 @@
 <pre><code><span class="kw">super</span>({ host, model, costPer1kTokens: { input: 0.0005, output: 0.0015 } });</code></pre>
     </div>
 
+    <h3>Retry e timeout</h3>
+    <p>
+      Chamadas HTTP falham de formas transitórias — um 429 de rate limit, um 503
+      momentâneo, a conexão que cai. O retry vem <b>ligado por padrão</b>: sem
+      configurar nada, são 3 tentativas com backoff exponencial.
+    </p>
+
+    <div class="code-card">
+<pre><code><span class="kw">super</span>({
+  host, model,
+  retry: {
+    maxAttempts: 3,        <span class="cm">// default</span>
+    timeoutMs: 120_000,    <span class="cm">// sem default — veja abaixo</span>
+    initialDelayMs: 500,   <span class="cm">// default</span>
+    maxDelayMs: 8_000,     <span class="cm">// default</span>
+    onRetry: (i) =&gt; console.warn(<span class="st">`tentativa ${i.attempt} falhou (${i.status})`</span>),
+  },
+});
+
+<span class="kw">super</span>({ host, model, retry: <span class="kw">false</span> });   <span class="cm">// desliga: uma tentativa só</span></code></pre>
+    </div>
+
+    <div class="content">
+    <table>
+      <thead><tr><th>Situação</th><th>Tenta de novo?</th></tr></thead>
+      <tbody>
+        <tr><td><code>429</code> rate limit · <code>408</code> · <code>425</code></td><td>sim</td></tr>
+        <tr><td><code>500</code> · <code>502</code> · <code>503</code> · <code>504</code></td><td>sim</td></tr>
+        <tr><td>erro de rede, conexão caída, abort por timeout</td><td>sim</td></tr>
+        <tr><td><code>400</code> · <code>401</code> · <code>403</code> · <code>404</code> e demais 4xx</td><td><b>não</b> — erro de contrato não melhora repetindo</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <p>
+      Quando o servidor manda <code>Retry-After</code>, ele vence o backoff
+      calculado. O backoff usa <i>full jitter</i>, para não sincronizar picos
+      entre clientes concorrentes. Para uma decisão própria, passe
+      <code>isRetryable</code>.
+    </p>
+
+    <div class="note warn">
+      <b>⚠️ <code>timeoutMs</code> não tem default</b>, de propósito. É o único
+      parâmetro capaz de quebrar um setup que já funcionava — um teto de 120s
+      abortaria um modelo local lento que hoje responde em 200s. Ligue quando
+      quiser que travamento vire falha recuperável: sem ele, uma requisição
+      pendurada só falha no limite do runtime (300s no undici) e derruba a run.
+    </div>
+
+    <div class="note warn">
+      <b>⚠️ Custo.</b> Reexecutar um <code>5xx</code> pode cobrar duas vezes se o
+      servidor processou a requisição e só a resposta se perdeu. E um 5xx
+      <i>permanente</i> (uma rota que o servidor não suporta) gasta as três
+      tentativas antes de falhar. Em fluxo sensível a custo ou latência, use
+      <code>maxAttempts: 1</code> ou um <code>isRetryable</code> próprio.
+    </div>
+
+    <div class="note">
+      O retry <b>não</b> infla o <code>maxChatCalls</code> de um
+      <a href="workflows.html">orçamento de run</a> — as tentativas são uma
+      chamada lógica só. Mas as esperas do backoff contam no
+      <code>maxDurationMs</code>. Quando houve retry, o nó <code>chat</code> do
+      report registra <code>attempts</code>.
+    </div>
+
     <h3>Tool calls emitidas como texto</h3>
     <p>
       Quando o provider não devolve tool calls nativas, o runtime tenta extrair a
@@ -161,7 +226,8 @@
     messages: Message[],
     sampling?: SamplingParams,
   ): Promise&lt;RawAssistant&gt; {
-    <span class="kw">const</span> response = <span class="kw">await</span> fetch(<span class="st">"https://api.anthropic.com/v1/messages"</span>, {
+    <span class="cm">// this.request em vez de fetch: herda retry e timeout de graça</span>
+    <span class="kw">const</span> { response, attempts } = <span class="kw">await this</span>.request(<span class="st">"https://api.anthropic.com/v1/messages"</span>, {
       method: <span class="st">"POST"</span>,
       headers: { <span class="st">"x-api-key"</span>: <span class="kw">this</span>.apiKey, <span class="st">"content-type"</span>: <span class="st">"application/json"</span> },
       body: JSON.stringify({
@@ -191,6 +257,7 @@
         promptTokens: data.usage?.input_tokens,
         completionTokens: data.usage?.output_tokens,
       },
+      attempts,   <span class="cm">// aparece no report quando houve retry</span>
     };
   }
 }</code></pre>
@@ -225,6 +292,10 @@
         <tr>
           <td>calcular <code>costUsd</code> a partir de <code>costPer1kTokens</code></td>
           <td><code>usage?</code> — tokens, se a API reportar</td>
+        </tr>
+        <tr>
+          <td>retry, backoff e timeout — desde que você use <code>this.request()</code></td>
+          <td><code>attempts</code> — repasse o que o <code>request()</code> devolveu</td>
         </tr>
       </tbody>
     </table>
