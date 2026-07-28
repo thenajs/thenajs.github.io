@@ -137,8 +137,24 @@
       Quando o servidor manda <code>Retry-After</code>, ele vence o backoff
       calculado. O backoff usa <i>full jitter</i>, para não sincronizar picos
       entre clientes concorrentes. Para uma decisão própria, passe
-      <code>isRetryable</code>.
+      <code>isRetryable</code> — ele recebe um <code>RetryAttempt</code>
+      (<code>{ attempt, maxAttempts, status?, error?, delayMs }</code>).
     </p>
+    <p>
+      Para reaproveitar a mesma política em vários providers, o tipo
+      <code>RetryPolicy</code> é exportado:
+    </p>
+    <div class="code-card">
+<pre><code><span class="kw">import type</span> { RetryPolicy } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+
+<span class="kw">const</span> resiliente: RetryPolicy = {
+  maxAttempts: 5,
+  timeoutMs: 120_000,
+  onRetry: (i) =&gt; logger.warn({ tentativa: i.attempt, status: i.status }),
+};
+
+<span class="kw">super</span>({ host, model, retry: resiliente });</code></pre>
+    </div>
 
     <div class="note warn">
       <b>⚠️ <code>timeoutMs</code> não tem default</b>, de propósito. É o único
@@ -305,8 +321,36 @@
       Opcionalmente, sobrescreva <code>embed(input)</code> se o backend tiver
       embeddings — o default devolve <code>[]</code>. E se precisar reaproveitar
       o parsing de resposta em texto, <code>parser</code> e
-      <code>normalizeToolCallEnvelope</code> também são exportados.
+      <code>normalizeToolCallEnvelope</code> também são exportados; para o
+      mapeamento de sampling, <code>pruneUndefined</code>. Quem sobrescreve o
+      <code>chat</code> inteiro (raro) usa o tipo <code>ChatParams</code>.
     </p>
+
+    <h3>Embeddings</h3>
+    <p>
+      <code>embed(input)</code> é <b>público</b>: chame direto no provider, sem
+      subclasse intermediária. Serve para busca semântica, RAG ou deduplicação —
+      o framework não opina sobre o que fazer com o vetor.
+    </p>
+    <div class="code-card">
+<pre><code><span class="kw">export class</span> LocalOllamaProvider <span class="kw">extends</span> OllamaProvider {
+  <span class="kw">constructor</span>() {
+    <span class="kw">super</span>({
+      host: <span class="st">"http://localhost:11434"</span>,
+      model: <span class="st">"qwen2.5-coder:7b"</span>,
+      embedModel: <span class="st">"nomic-embed-text"</span>,   <span class="cm">// modelo próprio para embeddings</span>
+    });
+  }
+}
+
+<span class="kw">const</span> vetor = <span class="kw">await new</span> LocalOllamaProvider().embed(<span class="st">"texto"</span>);
+<span class="cm">// → 768 dimensões com o nomic-embed-text</span></code></pre>
+    </div>
+    <div class="note">
+      Sem <code>embedModel</code>, o Ollama usa o mesmo <code>model</code> do chat
+      — e a maioria dos modelos de chat não serve para isso. Providers sem
+      suporte a embeddings devolvem <code>[]</code>.
+    </div>
 
     <div class="note">
       <b>Credenciais obrigatórias?</b> O <code>@Agent({ provider })</code> aceita

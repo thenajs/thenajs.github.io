@@ -56,11 +56,16 @@
       <tbody>
         <tr><td><code>workflow</code></td><td><code>chatCalls</code>, <code>toolCalls</code>, <code>tokens</code>, <code>costUsd</code>, <code>elapsedMs</code>, <code>exceeded</code></td></tr>
         <tr><td><code>loop</code></td><td><code>iterations</code>, <code>exhausted</code>, <code>maxIterations</code></td></tr>
-        <tr><td><code>chat</code></td><td><code>toolCallSource</code>, <code>promptTokens</code>, <code>completionTokens</code>, <code>costUsd</code></td></tr>
+        <tr><td><code>chat</code></td><td><code>toolCallSource</code>, <code>promptTokens</code>, <code>completionTokens</code>, <code>costUsd</code>, <code>attempts</code></td></tr>
         <tr><td><code>tool</code></td><td><code>isError</code> (e <code>status: "error"</code> no nó)</td></tr>
       </tbody>
     </table>
     </div>
+    <p>
+      O <code>attempts</code> só aparece quando houve <a href="providers.html">retry</a>
+      — no caminho normal o campo nem existe, então a presença dele já é o sinal
+      de que a API estava instável.
+    </p>
     <p>
       Ou seja: <code>tool_error_rate</code> é contar nós <code>kind: "tool"</code>
       com <code>status: "error"</code>; a taxa de resgate é contar

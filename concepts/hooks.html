@@ -63,17 +63,22 @@ ToolOutput = { content: string; isError?: boolean; data?: unknown }</code></pre>
     </div>
 
     <div class="note warn">
-      <b>⚠️ Duas pegadinhas de nome.</b><br />
-      O <code>ToolCall</code> dos hooks usa <code>args</code>, não
-      <code>arguments</code>. Existe um <b>outro</b> tipo também chamado
-      <code>ToolCall</code>, o do engine
-      (<code>{ id, name, arguments, source }</code>), que é o que aparece no
-      <code>ctx.turn</code> e no report — se o autocomplete importar o errado, os
-      campos não batem.
+      <b>⚠️ Dois tipos parecidos, e um retorno assimétrico.</b><br />
+      O <code>ToolCall</code> dos hooks usa <code>args</code>. O que circula no
+      <code>ctx.turn</code> e no report é o
+      <a href="providers.html"><code>ProviderToolCall</code></a>
+      (<code>{ id, name, arguments, source }</code>), com <code>arguments</code>.
+      São tipos diferentes de propósito: um é o que você intercepta, o outro é o
+      que o provider produziu.
       <br /><br />
       E o <code>afterTool</code> recebe um <code>ToolResult</code> mas
       <b>não</b> devolve um: devolva uma <code>string</code> (troca só o texto e
       preserva o <code>isError</code>) ou um <code>ToolOutput</code> completo.
+      <br /><br />
+      <small>Até a 0.2.0 os dois se chamavam <code>ToolCall</code> e o do engine
+      era o que vinha no autocomplete errado. Desde a 0.3.0 ele é
+      <code>ProviderToolCall</code>; o nome antigo segue como alias deprecado no
+      <code>@thenajs/agentflow</code>.</small>
     </div>
 
     <h3>Exemplo</h3>
