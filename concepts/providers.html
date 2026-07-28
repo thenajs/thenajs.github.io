@@ -126,16 +126,134 @@
       modelo pedir uma tool, o provider a executa e devolve o turno da tool.
     </p>
 
-    <h3>Escrevendo um provider</h3>
+    <h3>Escrevendo um provider próprio</h3>
     <p>
-      Qualquer provider estende <code>Providers</code> e implementa o
-      <code>chatInternal(tools, messages, sampling?)</code> (a chamada crua ao
-      modelo). A classe base cuida do resto: extrair a tool call, validar o
-      schema e executar a tool. Para um novo backend, basta traduzir
-      <code>messages</code> para o formato da API, mapear o
-      <code>sampling</code> e devolver o conteúdo — mais o
-      <code>usage</code>, se a API o reportar.
+      Qualquer backend vira provider: estenda <code>Providers</code>, chame
+      <code>configure()</code> no construtor e implemente
+      <code>chatInternal</code>. Tudo o que você precisa sai do
+      <code>@thenajs/core</code> — sem dependência extra.
     </p>
+
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">providers/anthropic.provider.ts</span></div>
+<pre><code><span class="kw">import</span> { Providers, pruneUndefined } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+<span class="kw">import type</span> {
+  ProviderCredentials, RawAssistant, ProviderToolCall,
+  ToolType, Message, SamplingParams,
+} <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+
+<span class="cm">// herda sampling, raw, rescueToolCalls e costPer1kTokens</span>
+<span class="kw">type</span> Credentials = ProviderCredentials &amp; { apiKey: string; model?: string };
+
+<span class="kw">export class</span> AnthropicProvider <span class="kw">extends</span> Providers {
+  <span class="kw">private readonly</span> apiKey: string;
+  <span class="kw">private readonly</span> model: string;
+
+  <span class="kw">constructor</span>(credentials: Credentials) {
+    <span class="kw">super</span>();
+    <span class="kw">this</span>.configure(credentials);   <span class="cm">// ← os campos comuns, de uma vez</span>
+    <span class="kw">this</span>.apiKey = credentials.apiKey;
+    <span class="kw">this</span>.model = credentials.model ?? <span class="st">"claude-sonnet-5"</span>;
+  }
+
+  <span class="kw">protected async</span> chatInternal(
+    tools: ToolType[],
+    messages: Message[],
+    sampling?: SamplingParams,
+  ): Promise&lt;RawAssistant&gt; {
+    <span class="kw">const</span> response = <span class="kw">await</span> fetch(<span class="st">"https://api.anthropic.com/v1/messages"</span>, {
+      method: <span class="st">"POST"</span>,
+      headers: { <span class="st">"x-api-key"</span>: <span class="kw">this</span>.apiKey, <span class="st">"content-type"</span>: <span class="st">"application/json"</span> },
+      body: JSON.stringify({
+        model: <span class="kw">this</span>.model,
+        messages: messages.map(toAnthropic),
+        tools: tools.map(toAnthropicTool),
+        <span class="cm">// pruneUndefined tira as chaves que o usuário não pediu</span>
+        ...pruneUndefined({
+          temperature: sampling?.temperature,
+          top_p: sampling?.topP,
+          max_tokens: sampling?.maxTokens ?? 1024,
+        }),
+        ...<span class="kw">this</span>.raw,   <span class="cm">// escape hatch, sem cast</span>
+      }),
+    });
+
+    <span class="kw">const</span> data = <span class="kw">await</span> response.json();
+
+    <span class="kw">const</span> toolCalls: ProviderToolCall[] = data.content
+      .filter((b) =&gt; b.type === <span class="st">"tool_use"</span>)
+      .map((b) =&gt; ({ id: b.id, name: b.name, arguments: b.input }));
+
+    <span class="kw">return</span> {
+      content: data.content.find((b) =&gt; b.type === <span class="st">"text"</span>)?.text ?? <span class="st">""</span>,
+      toolCalls: toolCalls.length ? toolCalls : <span class="kw">undefined</span>,
+      usage: {
+        promptTokens: data.usage?.input_tokens,
+        completionTokens: data.usage?.output_tokens,
+      },
+    };
+  }
+}</code></pre>
+    </div>
+
+    <h3>O contrato</h3>
+    <p>
+      <code>chatInternal</code> é o <b>único</b> método obrigatório. Vale saber o
+      que a classe base já faz por você, para não reimplementar:
+    </p>
+
+    <div class="content">
+    <table>
+      <thead><tr><th>A base garante</th><th>Você devolve</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>remover blocos de raciocínio (<code>&lt;think&gt;</code> e afins) do conteúdo</td>
+          <td><code>content</code> — o texto do modelo, como veio</td>
+        </tr>
+        <tr>
+          <td>resgatar a chamada do texto quando não houver <code>toolCalls</code>, e marcar <code>source</code></td>
+          <td><code>toolCalls?</code> — só as <b>nativas</b>; não tente resgatar você</td>
+        </tr>
+        <tr>
+          <td>validar os argumentos contra o schema da tool e executá-la</td>
+          <td>nada — a execução não é sua</td>
+        </tr>
+        <tr>
+          <td>mesclar o <code>sampling</code> do agente sobre o do provider</td>
+          <td>o mapeamento do shape neutro para as chaves da sua API</td>
+        </tr>
+        <tr>
+          <td>calcular <code>costUsd</code> a partir de <code>costPer1kTokens</code></td>
+          <td><code>usage?</code> — tokens, se a API reportar</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <p>
+      Opcionalmente, sobrescreva <code>embed(input)</code> se o backend tiver
+      embeddings — o default devolve <code>[]</code>. E se precisar reaproveitar
+      o parsing de resposta em texto, <code>parser</code> e
+      <code>normalizeToolCallEnvelope</code> também são exportados.
+    </p>
+
+    <div class="note">
+      <b>Credenciais obrigatórias?</b> O <code>@Agent({ provider })</code> aceita
+      a <b>classe</b> — e nesse caso a instancia com <code>new Provider()</code>,
+      logo ela precisa de construtor sem argumentos (o padrão de
+      <code>LocalOllamaProvider</code> acima). Se o seu provider exige
+      credenciais, passe uma <b>instância já configurada</b>:
+      <code>@Agent({ provider: new AnthropicProvider({ apiKey }) })</code>.
+    </div>
+
+    <div class="note">
+      <b>Nomes:</b> o <code>ProviderToolCall</code>
+      (<code>{ id, name, arguments, source }</code>) é o que você devolve em
+      <code>toolCalls</code> — não confunda com o <code>ToolCall</code> dos
+      <a href="hooks.html">hooks</a>, que é <code>{ name, args }</code>. O
+      <code>ToolCall</code> exportado pelo <code>@thenajs/agentflow</code> é um
+      alias deprecado do primeiro.
+    </div>
     <div class="note">
       Use um modelo pequeno (ex.: <code>qwen2.5:1.5b</code>) para iterar rápido e
       um maior (ex.: <code>qwen2.5-coder:7b</code>) quando precisar de qualidade.
