@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Memória vetorial — ThenaJS</title>
+<meta name="description" content="Busca semântica no ThenaJS: VectorStore, VectorMemory injetado no construtor, datasets como partição e o cliente Qdrant nativo." />
+<link rel="icon" href="../assets/logo.png" />
+<link rel="stylesheet" href="../assets/docs.css" />
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="ThenaJS" /><b>ThenaJS</b></a>
+    <span class="spacer"></span>
+    <a class="link" href="../getting-started.html">Documentação</a>
+    <a class="link" href="index.html">Conceitos</a>
+    <a class="link" href="https://github.com/thenajs/ThenaJS">GitHub</a>
+  </div>
+</header>
+
+<section>
+  <div class="wrap" style="max-width:840px;padding-top:32px">
+    <p><a href="index.html">← Conceitos</a></p>
+    <h2 class="section-title">Memória vetorial</h2>
+    <p class="section-sub">
+      Busca semântica: o agente grava textos e recupera por <b>similaridade</b>,
+      não por ordem. É o par que faltava para o
+      <a href="providers.html"><code>embed()</code></a> dos providers.
+    </p>
+
+    <div class="note warn">
+      <b>⚠️ Dois "memory" diferentes.</b> O
+      <a href="state-memory.html"><code>ctx.state.memory</code></a> é o bucket
+      <code>string[]</code> de contexto durável, projetado como mensagem
+      <code>system</code> — entra <b>sempre</b> no prompt, na ordem que você
+      colocou. A memória vetorial desta página é outra coisa: você grava muito e
+      recupera <b>só o relevante</b>, por similaridade. Uma é lembrete, a outra
+      é biblioteca.
+    </div>
+
+    <h3>Registrando o banco</h3>
+    <p>
+      Os stores vão no <a href="report.html">config</a>, como classes. O framework
+      instancia cada uma <b>uma vez</b> — uma conexão e um
+      <code>ensureCollection</code> por store, independente de quantos agentes
+      existem.
+    </p>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">vector/qdrant.store.ts</span></div>
+<pre><code><span class="kw">import</span> { QdrantStore } <span class="kw">from</span> <span class="st">"@thenajs/qdrant-client"</span>;
+
+<span class="kw">export class</span> MeuQdrant <span class="kw">extends</span> QdrantStore {
+  <span class="kw">constructor</span>() {
+    <span class="kw">super</span>({
+      url: <span class="st">"http://localhost:6333"</span>,
+      collection: <span class="st">"conhecimento"</span>,
+      datasets: [<span class="st">"persistent"</span>, <span class="st">"sessao"</span>],   <span class="cm">// opcional: valida os nomes</span>
+    });
+  }
+}</code></pre>
+    </div>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">config.ts</span></div>
+<pre><code><span class="kw">export const</span> config: ThenaConfig = {
+  log: <span class="kw">true</span>,
+  report: <span class="kw">true</span>,
+  memory: [MeuQdrant],   <span class="cm">// as classes; o framework instancia</span>
+};</code></pre>
+    </div>
+
+    <h3>Injeção no construtor</h3>
+    <p>
+      Nada a declarar no <code>@Agent</code>: quem quer memória pede no
+      construtor, como as <a href="tools.html">tools</a> já fazem com o
+      <code>WorkflowRuntime</code>. Os embeddings saem do
+      <code>provider</code> do próprio agente.
+    </p>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">explorer.agent.ts</span></div>
+<pre><code><span class="kw">@Agent</span>({
+  provider: LocalOllamaProvider,   <span class="cm">// o embed() dele gera os vetores</span>
+  prompt: <span class="st">"./explorer.agent.md"</span>,
+})
+<span class="kw">export class</span> ExplorerAgent {
+  <span class="kw">constructor</span>(<span class="kw">private readonly</span> memory: VectorMemory) {}
+
+  <span class="kw">async</span> beforePrompt(prompt: string, ctx: AgentContext) {
+    <span class="kw">const</span> pergunta = ctx.state.history.at(-1)?.content ?? <span class="st">""</span>;
+    <span class="kw">const</span> achados = <span class="kw">await this</span>.memory.recall(pergunta, {
+      dataset: <span class="st">"persistent"</span>,
+      limit: 3,
+      scoreThreshold: 0.5,
+    });
+
+    <span class="kw">if</span> (!achados.length) <span class="kw">return</span>;   <span class="cm">// undefined mantém o prompt</span>
+
+    <span class="kw">return</span> <span class="st">`${prompt}\n\n## Contexto\n${achados.map((a) =&gt; `- ${a.text}`).join("\n")}`</span>;
+  }
+
+  <span class="kw">async</span> afterResponse(resposta: string) {
+    <span class="kw">await this</span>.memory.remember(resposta, { dataset: <span class="st">"sessao"</span> });
+  }
+}</code></pre>
+    </div>
+    <p>
+      Agentes que não usam memória simplesmente não escrevem construtor — o
+      argumento extra é ignorado. Sem <code>memory</code> no config, o parâmetro
+      chega <code>undefined</code>.
+    </p>
+    <div class="note">
+      A injeção é <b>posicional</b>, não por tipo. <code>reflect-metadata</code>
+      foi evitado de propósito: o esbuild (que o <code>tsx</code> usa no
+      <code>npm start</code>) não emite <code>design:paramtypes</code>, então DI
+      por tipo compilaria e quebraria em silêncio no dev.
+    </div>
+
+    <h3>Datasets: vários contextos, um banco</h3>
+    <p>
+      <code>dataset</code> é sempre <b>opcional</b> — omitido, usa
+      <code>"default"</code>:
+    </p>
+    <div class="code-card">
+<pre><code><span class="kw">await this</span>.memory.remember(<span class="st">"um fato solto"</span>);              <span class="cm">// grava no "default"</span>
+<span class="kw">await this</span>.memory.recall(<span class="st">"pergunta"</span>);                     <span class="cm">// busca no "default"</span>
+<span class="kw">await this</span>.memory.recall(<span class="st">"pergunta"</span>, { dataset: <span class="kw">null</span> });  <span class="cm">// busca em TODOS</span>
+<span class="kw">await this</span>.memory.forget({ dataset: <span class="st">"sessao"</span> });          <span class="cm">// limpa um dataset</span></code></pre>
+    </div>
+    <p>
+      Datasets <b>não</b> são collections separadas: são um campo do payload com
+      índice dedicado. É a recomendação do próprio Qdrant — muitas collections
+      geram overhead de recursos, e o Qdrant Cloud limita a 1000 por cluster. Por
+      isso <code>dataset: null</code> consegue buscar através de todos, o que com
+      collections exigiria N buscas e merge manual.
+    </p>
+    <p>
+      Declarar <code>datasets</code> nas credentials é opcional e faz o runtime
+      recusar um nome que você não declarou, em vez de devolver zero resultados
+      em silêncio:
+    </p>
+    <div class="code-card">
+<pre><code>[thena] Dataset <span class="st">"persistnet"</span> não declarado. Conhecidos: persistent, sessao.</code></pre>
+    </div>
+
+    <h3>Mais de um banco</h3>
+    <p>
+      Uma collection guarda <b>um tamanho de vetor só</b>. Se dois agentes usam
+      modelos de embedding com dimensões diferentes (768 e 1536, por exemplo),
+      eles precisam de stores separados — basta acrescentar ao array:
+    </p>
+    <div class="code-card">
+<pre><code>memory: [QdrantNomic, QdrantOpenAI],
+
+<span class="cm">// agente de 768: recebe o primeiro</span>
+<span class="kw">constructor</span>(<span class="kw">private readonly</span> nomic: VectorMemory) {}
+
+<span class="cm">// agente de 1536: recebe os dois, usa o segundo</span>
+<span class="kw">constructor</span>(
+  <span class="kw">private readonly</span> _naoUso: VectorMemory,
+  <span class="kw">private readonly</span> openai: VectorMemory,
+) {}</code></pre>
+    </div>
+    <div class="note warn">
+      <b>⚠️ A ordem do array é contrato.</b> Reordenar troca qual store cada
+      agente usa, e o TypeScript não acusa — os parâmetros têm o mesmo tipo
+      <code>VectorMemory</code>. Acrescente sempre no fim, nunca no meio.
+      <br /><br />
+      Se as dimensões forem incompatíveis, o erro aparece na primeira escrita. Se
+      forem iguais, você grava na collection errada <b>em silêncio</b>.
+    </div>
+    <p>
+      Misturar dimensões num store só falha antes de gastar o embedding, com a
+      causa em vez do erro cru do banco:
+    </p>
+    <div class="code-card">
+<pre><code>[thena] Este store já foi preparado com 768 dimensões, mas agora recebeu
+embeddings de 1536. Uma collection aceita um único tamanho de vetor — modelos
+de embedding diferentes precisam de stores diferentes.</code></pre>
+    </div>
+
+    <h3>As dimensões são descobertas sozinhas</h3>
+    <p>
+      Ninguém deveria precisar saber de cabeça que <code>nomic-embed-text</code> é
+      768 e <code>text-embedding-3-small</code> é 1536. No primeiro
+      <code>remember</code>, o tamanho sai do próprio vetor e a collection é
+      criada com ele.
+    </p>
+    <div class="note">
+      Aponte um modelo dedicado a embeddings com <code>embedModel</code> nas
+      credentials do provider. Sem isso, o Ollama usa o mesmo modelo do chat — e a
+      maioria dos modelos de chat não serve para embeddings.
+    </div>
+
+    <h3>Trazendo seu próprio banco</h3>
+    <p>
+      O contrato é o <code>VectorStore</code>, e tudo sai do
+      <code>@thenajs/core</code> — mesmo modelo de
+      <a href="providers.html">escrever um provider</a>. A classe base cuida do
+      transporte (retry, timeout) e você traduz para a API do seu backend.
+    </p>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">pgvector.store.ts</span></div>
+<pre><code><span class="kw">import</span> { VectorStore } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+<span class="kw">import type</span> { VectorStoreCredentials, VectorDocument, VectorMatch,
+              VectorSearch, CollectionOptions } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+
+<span class="kw">export class</span> PgVectorStore <span class="kw">extends</span> VectorStore {
+  <span class="kw">constructor</span>(credentials: VectorStoreCredentials) {
+    <span class="kw">super</span>();
+    <span class="kw">this</span>.configureTransport(credentials);   <span class="cm">// ganha retry e timeout</span>
+  }
+
+  <span class="kw">async</span> ensureCollection(options: CollectionOptions) { <span class="cm">/* … */</span> }
+  <span class="kw">async</span> collectionExists() { <span class="cm">/* … */</span> }
+  <span class="kw">async</span> dropCollection() { <span class="cm">/* … */</span> }
+  <span class="kw">async</span> upsert(docs: VectorDocument[]) { <span class="cm">/* … */</span> }
+  <span class="kw">async</span> search(params: VectorSearch): Promise&lt;VectorMatch[]&gt; { <span class="cm">/* … */</span> }
+  <span class="kw">async</span> remove(selector: { ids?: (string | number)[] }) { <span class="cm">/* … */</span> }
+}</code></pre>
+    </div>
+    <p>
+      Filtros seguem o mesmo padrão de <code>sampling</code> + <code>raw</code>
+      dos providers: <code>where</code> para igualdade simples e
+      <code>rawFilter</code> para o formato nativo do banco, que vence quando
+      presente.
+    </p>
+
+    <h3>Sem agente nenhum</h3>
+    <p>
+      <code>VectorMemory</code> funciona solto, se você quiser usar fora de um
+      fluxo de agentes:
+    </p>
+    <div class="code-card">
+<pre><code><span class="kw">import</span> { VectorMemory } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+
+<span class="kw">const</span> memoria = <span class="kw">new</span> VectorMemory({
+  store: <span class="kw">new</span> MeuQdrant(),
+  provider: <span class="kw">new</span> LocalOllamaProvider(),
+});
+
+<span class="kw">await</span> memoria.remember(<span class="st">"o deploy roda pelo scripts/deploy.sh"</span>);
+<span class="kw">const</span> achados = <span class="kw">await</span> memoria.recall(<span class="st">"como faço deploy?"</span>, { limit: 3 });
+<span class="cm">// [{ text, score, dataset, id, payload }]</span></code></pre>
+    </div>
+
+    <div class="note">
+      O <a href="https://github.com/thenajs/ThenaJS/tree/main/packages/qdrant-client"><code>@thenajs/qdrant-client</code></a>
+      é um cliente nativo sobre a API REST — sem SDK. Requer <b>Qdrant 1.10 ou
+      superior</b>, porque o endpoint unificado <code>/points/query</code> estreou
+      nessa versão.
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>ThenaJS</span>
+    <span><a href="state-memory.html">← Estado &amp; memória</a> · <a href="hooks.html">Hooks →</a></span>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -37,7 +37,6 @@
   tools: [ShellTool],              <span class="cm">// ações disponíveis</span>
   prompt: <span class="st">"./explorer.agent.md"</span>,   <span class="cm">// obrigatório</span>
   sampling: { temperature: 0 },    <span class="cm">// opcional: sobrescreve o do provider</span>
-  memory: [conhecimento],          <span class="cm">// opcional: vira ctx.memory.conhecimento</span>
 })
 <span class="kw">export class</span> ExplorerAgent {}</code></pre>
     </div>
@@ -46,13 +45,6 @@
       configurado no <a href="providers.html">provider</a> — dá para deixar um
       agente determinístico e outro criativo usando o mesmo provider. Sem ele,
       nada é enviado e o modelo mantém o comportamento padrão.
-    </p>
-    <p>
-      O <code>memory</code> recebe <b>instâncias</b> de
-      <a href="memory.html">banco vetorial</a>, e cada uma vira
-      <code>ctx.memory.&lt;collection&gt;</code>. Para autocomplete nos nomes, a
-      classe declara <code>implements AgentHooks&lt;typeof memorias&gt;</code> —
-      o decorator resolve o runtime, mas não altera o tipo da classe.
     </p>
 
     <h3>Por que o prompt fica no markdown</h3>
