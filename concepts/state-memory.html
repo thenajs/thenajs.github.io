@@ -61,13 +61,21 @@
       (ex.: <code>ctx.reviewApproved</code>), o <code>until</code> de um
       <code>loop</code> consegue decidir quando parar.
     </p>
+
+    <div class="note warn">
+      <b>⚠️ <code>state.memory</code> não é a memória vetorial.</b> Este aqui é o
+      bucket <code>string[]</code> projetado como mensagem <code>system</code> —
+      contexto que <b>sempre</b> vai no prompt. Para busca por similaridade, veja
+      <a href="memory.html">Memória vetorial</a> (<code>ctx.memory</code>, sem o
+      <code>state</code>).
+    </div>
   </div>
 </section>
 
 <footer class="footer">
   <div class="wrap">
     <span>ThenaJS</span>
-    <span><a href="workflow-as-tool.html">← Workflow como Tool</a> · <a href="hooks.html">Hooks →</a></span>
+    <span><a href="workflow-as-tool.html">← Workflow como Tool</a> · <a href="memory.html">Memória vetorial →</a></span>
   </div>
 </footer>
 

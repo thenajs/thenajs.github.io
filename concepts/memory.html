@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Memória vetorial — ThenaJS</title>
+<meta name="description" content="Busca semântica no ThenaJS: ctx.memory indexado pelo nome da collection, o contrato VectorStore para trazer seu próprio banco, e o cliente Qdrant nativo." />
+<link rel="icon" href="../assets/logo.png" />
+<link rel="stylesheet" href="../assets/docs.css" />
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="../index.html"><img src="../assets/logo.png" alt="ThenaJS" /><b>ThenaJS</b></a>
+    <span class="spacer"></span>
+    <a class="link" href="../getting-started.html">Documentação</a>
+    <a class="link" href="index.html">Conceitos</a>
+    <a class="link" href="https://github.com/thenajs/ThenaJS">GitHub</a>
+  </div>
+</header>
+
+<section>
+  <div class="wrap" style="max-width:840px;padding-top:32px">
+    <p><a href="index.html">← Conceitos</a></p>
+    <h2 class="section-title">Memória vetorial</h2>
+    <p class="section-sub">
+      Busca semântica: o agente grava textos e recupera por <b>similaridade</b>,
+      não por ordem. É o par que faltava para o <code>embed()</code> dos
+      <a href="providers.html">providers</a>.
+    </p>
+
+    <div class="note warn">
+      <b>⚠️ Não confunda com <code>ctx.state.memory</code>.</b> Aquele é o bucket
+      <code>string[]</code> de contexto durável que vira mensagem
+      <code>system</code> no prompt (veja
+      <a href="state-memory.html">Estado &amp; memória</a>). Este aqui —
+      <code>ctx.memory</code>, sem o <code>state</code> — é o banco vetorial.
+      Nomes parecidos, coisas diferentes.
+    </div>
+
+    <h3>O nome da collection é a chave</h3>
+    <p>
+      Cada store aponta para uma collection, e o nome dela vira o acesso em
+      <code>ctx.memory.&lt;collection&gt;</code>. Declare quantos precisar:
+    </p>
+
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">vector/stores.ts</span></div>
+<pre><code><span class="kw">import</span> { QdrantStore } <span class="kw">from</span> <span class="st">"@thenajs/qdrant-client"</span>;
+
+<span class="kw">export const</span> conhecimento = <span class="kw">new</span> QdrantStore({
+  url: <span class="st">"http://localhost:6333"</span>,
+  collection: <span class="st">"conhecimento"</span>,
+});
+
+<span class="kw">export const</span> cache = <span class="kw">new</span> QdrantStore({
+  url: <span class="st">"http://localhost:6333"</span>,
+  collection: <span class="st">"cache"</span>,
+});
+
+<span class="kw">export const</span> memorias = [conhecimento, cache] <span class="kw">as const</span>;</code></pre>
+    </div>
+
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">explorer.agent.ts</span></div>
+<pre><code><span class="kw">@Agent</span>({
+  provider: LocalOllamaProvider,   <span class="cm">// o embed() dele gera os vetores</span>
+  memory: memorias,                <span class="cm">// ← runtime</span>
+  prompt: <span class="st">"./explorer.agent.md"</span>,
+})
+<span class="kw">export class</span> ExplorerAgent <span class="kw">implements</span> AgentHooks&lt;<span class="kw">typeof</span> memorias&gt; {  <span class="cm">// ← tipo</span>
+
+  <span class="kw">async</span> beforePrompt(prompt: string, ctx: AgentContext&lt;<span class="kw">typeof</span> memorias&gt;) {
+    <span class="kw">const</span> pergunta = ctx.state.history.at(-1)?.content ?? <span class="st">""</span>;
+
+    <span class="kw">const</span> achados = <span class="kw">await</span> ctx.memory.conhecimento.recall(pergunta, {
+      limit: 3,
+      scoreThreshold: 0.5,
+    });
+
+    <span class="kw">if</span> (!achados.length) <span class="kw">return</span>;   <span class="cm">// undefined mantém o prompt</span>
+
+    <span class="kw">return</span> <span class="st">`${prompt}\n\n## Contexto\n${achados.map((a) =&gt; `- ${a.text}`).join("\n")}`</span>;
+  }
+
+  <span class="kw">async</span> afterResponse(resposta: string, ctx: AgentContext&lt;<span class="kw">typeof</span> memorias&gt;) {
+    <span class="kw">await</span> ctx.memory.cache.remember(resposta);
+  }
+}</code></pre>
+    </div>
+
+    <h3>Por que o <code>implements</code></h3>
+    <p>
+      <code>ctx.memory.conhecimento</code> tem autocomplete, e um typo não
+      compila. Quem dá isso é o
+      <code>implements AgentHooks&lt;typeof memorias&gt;</code> — o decorator
+      sozinho não consegue.
+    </p>
+    <p>
+      Um class decorator tem assinatura <code>(target) =&gt; void</code> e o corpo
+      da classe é checado <b>independentemente</b> dos argumentos dele. É a mesma
+      razão pela qual <code>@Agent({ tools: [ShellTool] })</code> não tipa nada
+      sobre as tools dentro da classe. O <code>implements</code>, por fazer parte
+      da declaração, carrega o tipo para os métodos.
+    </p>
+
+    <div class="note warn">
+      <b>⚠️ Passe instâncias, não classes.</b> O nome da collection só é inferido
+      na <b>instanciação</b>. Numa subclasse os type params são fixados no
+      <code>extends</code> e o <code>super()</code> não os retroalimenta — você
+      ficaria com <code>collection: string</code> e perderia o autocomplete sem
+      perceber. É a diferença em relação ao <code>provider</code>, que aceita
+      classe.
+    </div>
+
+    <h3>A API</h3>
+    <div class="code-card">
+<pre><code><span class="cm">// gravar</span>
+<span class="kw">await</span> ctx.memory.conhecimento.remember(<span class="st">"o deploy roda pelo scripts/deploy.sh"</span>);
+<span class="kw">await</span> ctx.memory.conhecimento.remember(<span class="st">"nota"</span>, { payload: { tipo: <span class="st">"infra"</span> } });
+<span class="kw">await</span> ctx.memory.conhecimento.rememberMany([{ text: <span class="st">"a"</span> }, { text: <span class="st">"b"</span> }]);
+
+<span class="cm">// buscar</span>
+<span class="kw">await</span> ctx.memory.conhecimento.recall(<span class="st">"como faço deploy?"</span>, { limit: 3 });
+<span class="kw">await</span> ctx.memory.conhecimento.recall(<span class="st">"q"</span>, { where: { tipo: <span class="st">"infra"</span> } });
+<span class="kw">await</span> ctx.memory.conhecimento.recall(<span class="st">"q"</span>, { scoreThreshold: 0.5 });
+
+<span class="cm">// esquecer</span>
+<span class="kw">await</span> ctx.memory.conhecimento.forget({ where: { tipo: <span class="st">"infra"</span> } });</code></pre>
+    </div>
+
+    <p>
+      O <code>recall</code> devolve <code>{ text, score, id, payload }</code>
+      ordenado por similaridade. O <code>payload</code> que você grava volta
+      inteiro, e serve de filtro pelo <code>where</code> — é assim que se separa
+      contexto <b>dentro</b> de uma collection (por tipo, por origem, por sessão)
+      sem precisar de outro store.
+    </p>
+
+    <div class="note warn">
+      <b>⚠️ A collection guarda um <code>size</code> fixo</b>, descoberto no
+      primeiro <code>remember</code> pelo tamanho do vetor — 768 com
+      <code>nomic-embed-text</code>, 1536 com
+      <code>text-embedding-3-small</code>. Dois agentes com modelos de embedding
+      de dimensões diferentes apontando para a mesma collection vão colidir, e o
+      banco recusa. Falha barulhenta, que é o certo, mas vale saber.
+    </div>
+
+    <h3>Uma collection ou várias?</h3>
+    <p>
+      Vários stores são para contextos <b>estáticos e poucos</b>, declarados no
+      código. Para contexto dinâmico — por usuário, por sessão, por tenant — use
+      uma collection só e separe pelo <code>payload</code>:
+    </p>
+    <div class="code-card">
+<pre><code><span class="cm">// dinâmico: uma collection, filtro no payload</span>
+<span class="kw">await</span> ctx.memory.conhecimento.remember(nota, { payload: { userId } });
+<span class="kw">await</span> ctx.memory.conhecimento.recall(pergunta, { where: { userId } });</code></pre>
+    </div>
+    <div class="note">
+      O Qdrant desaconselha <b>muitas</b> collections — limite de 1000 por cluster
+      no Cloud, e overhead de recursos. Dezenas de contextos estáticos está
+      tranquilo; milhares de usuários, não.
+    </div>
+
+    <h3>Trazendo o seu próprio banco</h3>
+    <p>
+      O contrato é o <code>VectorStore</code>, no mesmo modelo dos
+      <a href="providers.html">providers</a>: a classe base cuida do transporte
+      (retry, timeout) e você implementa a tradução para a API do seu backend.
+      Tudo sai do <code>@thenajs/core</code>.
+    </p>
+    <div class="code-card">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:8px">pgvector.store.ts</span></div>
+<pre><code><span class="kw">import</span> { VectorStore } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+<span class="kw">import type</span> {
+  VectorStoreCredentials, VectorDocument, VectorMatch,
+  VectorSearch, CollectionOptions,
+} <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+
+<span class="kw">export class</span> PgVectorStore&lt;C <span class="kw">extends</span> string = string&gt; <span class="kw">extends</span> VectorStore&lt;C&gt; {
+  <span class="kw">public readonly</span> collection: string;
+
+  <span class="kw">constructor</span>(credentials: VectorStoreCredentials&lt;C&gt;) {
+    <span class="kw">super</span>();
+    <span class="kw">this</span>.configureTransport(credentials);   <span class="cm">// ganha retry e timeout</span>
+    <span class="kw">this</span>.collection = credentials.collection ?? <span class="st">"thena_memory"</span>;
+  }
+
+  <span class="kw">async</span> ensureCollection(options: CollectionOptions) { <span class="cm">/* … */</span> }
+  <span class="kw">async</span> collectionExists() { <span class="cm">/* … */</span> }
+  <span class="kw">async</span> dropCollection() { <span class="cm">/* … */</span> }
+  <span class="kw">async</span> upsert(docs: VectorDocument[]) { <span class="cm">/* … */</span> }
+  <span class="kw">async</span> search(params: VectorSearch): Promise&lt;VectorMatch[]&gt; { <span class="cm">/* … */</span> }
+  <span class="kw">async</span> remove(selector: { ids?: (string | number)[] }) { <span class="cm">/* … */</span> }
+}</code></pre>
+    </div>
+
+    <div class="content">
+    <table>
+      <thead><tr><th>A base garante</th><th>Você implementa</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>retry, backoff e timeout — via <code>this.request()</code></td>
+          <td>a tradução para a API do backend</td>
+        </tr>
+        <tr>
+          <td>criar a collection uma vez só, com as dimensões descobertas</td>
+          <td><code>ensureCollection</code> idempotente</td>
+        </tr>
+        <tr>
+          <td>o <code>embed()</code> e o formato do <code>recall</code></td>
+          <td><code>search</code> devolvendo <code>{ id, score, payload }</code> ordenado</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <p>
+      Filtros seguem o mesmo padrão de <code>sampling</code> + <code>raw</code>
+      dos providers: <code>where</code> para igualdade simples e
+      <code>rawFilter</code> para o formato nativo do banco.
+    </p>
+
+    <h3>Sem o <code>@Agent</code></h3>
+    <p>
+      <code>VectorMemory</code> funciona solto — é só a cola entre um provider e
+      um store:
+    </p>
+    <div class="code-card">
+<pre><code><span class="kw">import</span> { VectorMemory } <span class="kw">from</span> <span class="st">"@thenajs/core"</span>;
+
+<span class="kw">const</span> memoria = <span class="kw">new</span> VectorMemory({
+  store: conhecimento,
+  provider: <span class="kw">new</span> LocalOllamaProvider(),
+});
+
+<span class="kw">await</span> memoria.remember(<span class="st">"o deploy roda pelo scripts/deploy.sh"</span>);
+<span class="kw">const</span> achados = <span class="kw">await</span> memoria.recall(<span class="st">"como faço deploy?"</span>, { limit: 3 });</code></pre>
+    </div>
+
+    <div class="note">
+      O framework <b>não</b> decide quando buscar nem como formatar o resultado.
+      No <a href="hooks.html">hook</a> o contexto sempre entra; numa
+      <a href="tools.html">tool</a>, o modelo decide se precisa. As duas formas
+      são suas.
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>ThenaJS</span>
+    <span><a href="state-memory.html">← Estado &amp; memória</a> · <a href="hooks.html">Hooks →</a></span>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -329,8 +329,9 @@
     <h3>Embeddings</h3>
     <p>
       <code>embed(input)</code> é <b>público</b>: chame direto no provider, sem
-      subclasse intermediária. Serve para busca semântica, RAG ou deduplicação —
-      o framework não opina sobre o que fazer com o vetor.
+      subclasse intermediária. Para guardar e buscar esses vetores, veja
+      <a href="memory.html">Memória vetorial</a> — o framework não opina sobre o
+      que fazer com eles.
     </p>
     <div class="code-card">
 <pre><code><span class="kw">export class</span> LocalOllamaProvider <span class="kw">extends</span> OllamaProvider {
