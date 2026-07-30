@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Memória vetorial — ThenaJS</title>
-<meta name="description" content="Busca semântica no ThenaJS: VectorStore, VectorMemory injetado no construtor, datasets como partição e o cliente Qdrant nativo." />
+<meta name="description" content="Busca semântica no ThenaJS: VectorStore, VectorMemory injetado no construtor, datasets como partição de payload e o cliente Qdrant nativo." />
 <link rel="icon" href="../assets/logo.png" />
 <link rel="stylesheet" href="../assets/docs.css" />
 </head>
@@ -56,7 +56,6 @@
     <span class="kw">super</span>({
       url: <span class="st">"http://localhost:6333"</span>,
       collection: <span class="st">"conhecimento"</span>,
-      datasets: [<span class="st">"persistent"</span>, <span class="st">"sessao"</span>],   <span class="cm">// opcional: valida os nomes</span>
     });
   }
 }</code></pre>
@@ -134,14 +133,7 @@
       isso <code>dataset: null</code> consegue buscar através de todos, o que com
       collections exigiria N buscas e merge manual.
     </p>
-    <p>
-      Declarar <code>datasets</code> nas credentials é opcional e faz o runtime
-      recusar um nome que você não declarou, em vez de devolver zero resultados
-      em silêncio:
-    </p>
-    <div class="code-card">
-<pre><code>[thena] Dataset <span class="st">"persistnet"</span> não declarado. Conhecidos: persistent, sessao.</code></pre>
-    </div>
+
 
     <h3>Mais de um banco</h3>
     <p>
