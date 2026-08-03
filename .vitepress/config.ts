@@ -78,6 +78,7 @@ export default defineConfig({
           { text: "@Workflow", link: "/referencia/workflow" },
           { text: "ThenaConfig", link: "/referencia/config" },
           { text: "Hooks", link: "/referencia/hooks" },
+          { text: "Injeção", link: "/referencia/injecao" },
           { text: "Contexto (ctx)", link: "/referencia/contexto" },
           { text: "Providers", link: "/referencia/providers" },
           { text: "Banco vetorial", link: "/referencia/vetorial" },

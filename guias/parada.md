@@ -41,30 +41,39 @@ escrever o seu — as próximas seções mostram como.
 
 ## Parar quando algo foi decidido
 
-Quando o critério não é "respondeu", mas "chegou a uma conclusão", use um campo do
-contexto. O agente grava, o `until` lê:
+Quando o critério não é "respondeu", mas "chegou a uma conclusão", declare o
+[estado do workflow](/como-funciona/estado#o-estado-do-workflow): o agente grava,
+o `until` lê.
+
+```ts
+// revisao.state.ts
+export class RevisaoState {
+  aprovado = false;
+}
+```
 
 ```ts
 export class RevisorAgent {
-  async afterResponse(resposta: string, ctx: AgentContext) {
-    ctx.aprovado = resposta.includes("APROVADO");
+  constructor(@state() private readonly s: RevisaoState) {}
+
+  async afterResponse(resposta: string) {
+    this.s.aprovado = resposta.includes("APROVADO");
   }
 }
 ```
 
 ```ts
-loop({
-  steps: [RevisorAgent],
-  until: (ctx) => ctx.aprovado === true,
-  maxIterations: 5,
+@Workflow({
+  state: RevisaoState,
+  steps: [
+    loop({
+      steps: [RevisorAgent],
+      until: (ctx, s: RevisaoState) => s.aprovado,   // ← o estado é o 2º parâmetro
+      maxIterations: 5,
+    }),
+  ],
 })
-```
-
-Com um [estado tipado](/como-funciona/estado#um-estado-tipado-para-o-seu-workflow)
-isso fica mais legível e resistente a typo:
-
-```ts
-until: (ctx) => estado(ctx).aprovado
+export class RevisaoWorkflow {}
 ```
 
 ## Parar por qualidade da resposta
@@ -87,7 +96,7 @@ const until = (ctx) => {
 O `until` é uma função comum — combine à vontade:
 
 ```ts
-until: (ctx) => estado(ctx).aprovado || ctx.turn?.toolError === true
+until: (ctx, s: RevisaoState) => s.aprovado || ctx.turn?.toolError === true
 ```
 
 E pode ser assíncrono, se precisar consultar algo:
@@ -140,7 +149,7 @@ loop({
 // um agente decide, outro revisa
 loop({
   steps: [ExecutorAgent, RevisorAgent],
-  until: (ctx) => estado(ctx).aprovado,
+  until: (ctx, s: RevisaoState) => s.aprovado,
   maxIterations: 5,
 })
 ```
@@ -161,8 +170,7 @@ loop({
 // desiste depois de N erros de ferramenta
 loop({
   steps: [Agente],
-  until: (ctx) => {
-    const s = estado(ctx);
+  until: (ctx, s: MeuState) => {
     if (ctx.turn?.toolError) s.erros++;
     return s.erros >= 3 || !ctx.turn?.calledTool;
   },
@@ -181,7 +189,7 @@ terminar vence. Se o seu loop tem um `parallel` dentro, não confie em
 ```ts
 loop({
   steps: [parallel([AgenteA, AgenteB])],
-  until: (ctx) => estado(ctx).aProntoA && estado(ctx).aProntoB,
+  until: (_ctx, s: MeuState) => s.prontoA && s.prontoB,
   maxIterations: 5,
 })
 ```

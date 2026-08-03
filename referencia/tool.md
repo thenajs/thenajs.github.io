@@ -29,8 +29,18 @@ export class LerArquivoTool {
 execute(args: any): string | ToolOutput | Promise<string | ToolOutput>
 ```
 
-Recebe os argumentos **já validados** pelo schema. Não recebe `ctx`, histórico nem
-memória.
+Recebe os argumentos **já validados** pelo schema.
+
+Para receber mais que isso, decore os parâmetros — veja
+[Injeção](/referencia/injecao):
+
+```ts
+async execute(
+  @input() args: { caminho: string },
+  @context() ctx: AgentContext,
+  @state() s: RevisaoState,
+) {}
+```
 
 ```ts
 type ToolOutput = {

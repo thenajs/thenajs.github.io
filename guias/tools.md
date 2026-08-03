@@ -54,9 +54,9 @@ dele você já trabalha com dados verificados.
 Mantenha estrito. Um `z.string()` genérico deixa passar coisa que um
 `z.enum(["leitura", "escrita"])` recusaria de graça.
 
-## O `execute` recebe só os argumentos
+## O que o `execute` recebe
 
-Nada de contexto, histórico ou memória — só o objeto validado:
+Por padrão, só o objeto já validado pelo schema:
 
 ```ts
 async execute({ caminho }: { caminho: string }) {
@@ -64,9 +64,27 @@ async execute({ caminho }: { caminho: string }) {
 }
 ```
 
-Se a tool precisa de algo do fluxo, os caminhos são: colocar nos argumentos (o
-modelo preenche), rederivar dentro dela, ou usar um
-[sub-workflow](/guias/sub-agente).
+É o caso comum, e mantém a tool trivial de testar. Quando ela precisa de mais, os
+parâmetros dizem o que querem — e a ordem não importa:
+
+```ts
+import { Tool, input, context, state } from "@thenajs/core";
+
+async execute(
+  @input() { caminho }: { caminho: string },   // os argumentos validados
+  @context() ctx: AgentContext,                 // o contexto da execução
+  @state() s: RevisaoState,                     // o estado do workflow
+) {
+  s.arquivosLidos.push(caminho);
+  return readFile(caminho, "utf8");
+}
+```
+
+::: tip Use com parcimônia
+Uma tool que lê o contexto deixa de ser testável isoladamente. O caso que mais
+justifica é repassar informação a um [sub-workflow](/guias/sub-agente), que roda
+isolado e começaria sem saber o que foi pedido.
+:::
 
 ## Sinalizar que deu errado
 

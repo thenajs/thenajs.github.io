@@ -38,15 +38,17 @@ await app.run({
 });
 ```
 
-## `ctx` — os seus dados
+## `ctx` — os seus dados avulsos
 
-O contexto aceita qualquer campo. É onde você guarda o que **seu código** precisa
-saber, sem poluir o que o modelo lê:
+O contexto aceita qualquer campo, tipado como `unknown`:
 
 ```ts
-ctx.aprovado = true;
 ctx.tentativas = (ctx.tentativas as number ?? 0) + 1;
 ```
+
+Serve para uma marcação pontual. Para o que os passos realmente trocam entre si,
+prefira [o estado do workflow](#o-estado-do-workflow), que é tipado e não exige
+cast.
 
 O runtime também escreve alguns campos ali:
 
@@ -57,60 +59,60 @@ O runtime também escreve alguns campos ali:
 | `ctx.loop` | `{ iterations, exhausted }` do laço mais recente |
 | `ctx.budget` | consumo acumulado, quando há orçamento |
 
-## Um estado tipado para o seu workflow
+## O estado do workflow
 
-O `ctx` é permissivo por padrão (`Record<string, unknown>`), o que é flexível mas
-custa autocomplete e deixa typo passar. Para fluxos maiores, vale declarar o
-formato num arquivo só — o equivalente a um "arquivo de estado":
+Para o que os passos trocam entre si, declare uma classe. Os valores iniciais são
+as próprias inicializações de campo — sem schema, sem factory, sem cast:
 
 ```ts
 // src/workflows/revisao.state.ts
-import type { AgentContext } from "@thenajs/core";
-
-/** O que os passos deste workflow trocam entre si. */
-export interface RevisaoState {
-  arquivosLidos: string[];
-  problemas: { arquivo: string; descricao: string }[];
-  aprovado: boolean;
-}
-
-/** Lê o ctx com o formato acima, com defaults. */
-export function estado(ctx: AgentContext): RevisaoState {
-  ctx.arquivosLidos ??= [];
-  ctx.problemas ??= [];
-  ctx.aprovado ??= false;
-  return ctx as unknown as RevisaoState;
+export class RevisaoState {
+  aprovado = false;
+  rodadas = 0;
+  problemas: string[] = [];
 }
 ```
 
-Aí os passos usam o helper em vez de tocar no `ctx` cru:
+O workflow declara, e o framework instancia **uma por execução**:
 
 ```ts
-import { estado } from "../workflows/revisao.state.js";
+@Workflow({
+  state: RevisaoState,
+  steps: [ /* … */ ],
+})
+export class RevisaoWorkflow {}
+```
 
+Quem precisa dele pede com `@state()`:
+
+```ts
+@Agent({ provider: MeuProvider, prompt: "./revisor.agent.md" })
 export class RevisorAgent {
-  async afterResponse(resposta: string, ctx: AgentContext) {
-    const s = estado(ctx);              // ← tipado daqui em diante
-    s.aprovado = resposta.includes("APROVADO");
-    s.problemas.push({ arquivo: "src/main.ts", descricao: resposta });
+  constructor(@state() private readonly s: RevisaoState) {}
+
+  async afterResponse(resposta: string) {
+    this.s.rodadas++;
+    this.s.aprovado = /\bAPROVADO\b/.test(resposta);
   }
 }
 ```
 
-E o `until` do loop fica legível:
+E o `until` recebe como segundo parâmetro:
 
 ```ts
 loop({
   steps: [RevisorAgent],
-  until: (ctx) => estado(ctx).aprovado,
+  until: (ctx, s: RevisaoState) => s.aprovado,
   maxIterations: 5,
 })
 ```
 
-::: tip Por que um helper, e não um tipo genérico
-Um genérico teria que atravessar `AgentContext`, `AgentHooks`, `until` e todo hook
-— viral, e obriga a repetir o tipo em cada assinatura. Uma função de acesso resolve
-com uma linha por uso, sem contaminar a API do framework.
+Todos veem **o mesmo objeto** — agentes, hooks, tools e o `until`. Nada de
+`as unknown as`, nada de campo solto no `ctx`.
+
+::: tip Tools também
+Uma tool pode pedir o estado: `async execute(@input() args, @state() s)`. É o
+único jeito de uma tool alcançar algo do fluxo — veja [Tools](/guias/tools).
 :::
 
 ## A saída de um passo vira fala do próximo
@@ -137,22 +139,34 @@ export class PlannerAgent {
 A alternativa, quando o passo precisa de histórico próprio e não só de uma saída
 limpa, é isolá-lo — veja [Sub-agente isolado](/guias/sub-agente).
 
-## Ferramentas não veem o `ctx`
+## O que uma ferramenta enxerga
 
-O `execute` de uma tool recebe **só os argumentos validados**. Isso é proposital:
-a tool é uma função pura do ponto de vista do fluxo, e o que ela precisa saber deve
-estar nos argumentos — que o modelo preenche, ou que você rederiva dentro dela.
+Por padrão, o `execute` recebe **só os argumentos validados** — a tool é uma
+função pura do ponto de vista do fluxo, e isso a mantém trivial de testar:
 
 ```ts
 async execute({ caminho }: { caminho: string }) {
-  // sem ctx, sem history, sem memory
   return readFile(caminho, "utf8");
 }
 ```
 
-Se uma tool precisa mesmo de contexto do fluxo, os caminhos são: colocar nos
-argumentos, rederivar dentro dela, ou usar
-[um sub-workflow](/guias/sub-agente) e passar contexto explícito.
+Quando ela precisa de mais, os parâmetros dizem o que querem:
+
+```ts
+async execute(
+  @input() { caminho }: { caminho: string },
+  @context() ctx: AgentContext,
+  @state() s: RevisaoState,
+) {
+  s.arquivosLidos.push(caminho);
+  return readFile(caminho, "utf8");
+}
+```
+
+Use com parcimônia: uma tool que lê o contexto deixa de ser testável isoladamente.
+O caso que mais justifica é repassar informação a um
+[sub-workflow](/guias/sub-agente), que roda isolado e começa sem saber o que foi
+pedido.
 
 ## Próximo
 

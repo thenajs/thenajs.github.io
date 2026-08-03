@@ -91,31 +91,28 @@ const parecer = await runWorkflow(MeuWorkflow, "Revise o diretório src/");
 
 ## Um exemplo completo
 
-Um revisor que lê, avalia e repete até aprovar:
+Um revisor que lê, avalia e repete até aprovar. O estado é o que amarra tudo:
 
 ```ts
 // src/workflows/revisao.state.ts
-import type { AgentContext } from "@thenajs/core";
-
-export interface RevisaoState { aprovado: boolean; rodadas: number }
-
-export function estado(ctx: AgentContext): RevisaoState {
-  ctx.aprovado ??= false;
-  ctx.rodadas ??= 0;
-  return ctx as unknown as RevisaoState;
+export class RevisaoState {
+  aprovado = false;
+  rodadas = 0;
 }
 ```
 
 ```ts
 // src/workflows/revisao.workflow.ts
 @Workflow({
+  state: RevisaoState,
   steps: [
     PlannerAgent,                     // decide o que olhar
     loop({
       steps: [LeitorAgent, RevisorAgent],
-      until: (ctx) => estado(ctx).aprovado,
+      until: (_ctx, s: RevisaoState) => s.aprovado,
       maxIterations: 5,
-      onExhausted: (ctx) => console.warn(`não aprovou em ${estado(ctx).rodadas} rodadas`),
+      onExhausted: (_ctx, voltas) =>
+        console.warn(`não aprovou em ${voltas} rodadas`),
     }),
   ],
 })
@@ -125,13 +122,18 @@ export class RevisaoWorkflow {}
 ```ts
 // o revisor grava a decisão que o `until` lê
 export class RevisorAgent {
-  async afterResponse(resposta: string, ctx: AgentContext) {
-    const s = estado(ctx);
-    s.rodadas++;
-    s.aprovado = resposta.includes("APROVADO");
+  constructor(@state() private readonly s: RevisaoState) {}
+
+  async afterResponse(resposta: string) {
+    this.s.rodadas++;
+    this.s.aprovado = resposta.includes("APROVADO");
   }
 }
 ```
+
+Sem alguém gravar `aprovado`, a condição nunca ficaria verdadeira e o loop rodaria
+até o teto toda vez — é o erro mais comum ao montar o primeiro laço com critério
+próprio.
 
 ## Próximo
 

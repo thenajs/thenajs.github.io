@@ -13,6 +13,25 @@ Declara a ordem dos passos. Todos compartilham o mesmo estado.
 export class MeuWorkflow {}
 ```
 
+## `state`
+
+```ts
+@Workflow({ state: RevisaoState, steps: [ /* … */ ] })
+```
+
+Classe instanciada **uma vez por execução**. Os valores iniciais são as próprias
+inicializações de campo:
+
+```ts
+export class RevisaoState {
+  aprovado = false;
+  rodadas = 0;
+}
+```
+
+A mesma instância é entregue a quem pedir com [`@state()`](/referencia/injecao) e
+ao `until` dos loops, como segundo parâmetro.
+
 ## Tipos de passo
 
 ```ts
@@ -39,7 +58,7 @@ A última escrita vence, e a ordem é uma corrida. Leia os resultados em
 ```ts
 loop({
   steps: WorkflowStep[],
-  until: (ctx) => unknown,          // true = PARAR
+  until: (ctx, state?) => unknown,  // true = PARAR; state vem do @Workflow
   maxIterations?: number,
   onExhausted?: (ctx, iterations) => unknown,
 })

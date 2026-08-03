@@ -49,6 +49,15 @@ export class MeuAgente {
 Agentes que não usam memória não escrevem construtor — o argumento extra é
 ignorado. Sem `memory` no config, o parâmetro chega `undefined`.
 
+Para não depender da ordem, use os [decorators de injeção](/referencia/injecao):
+
+```ts
+constructor(
+  @state() private readonly s: RevisaoState,
+  @memory(QdrantOpenAI) private readonly vetor: VectorMemory,
+) {}
+```
+
 ::: warning A injeção é posicional
 Com vários stores, a ordem do array em `ThenaConfig.memory` é a ordem dos
 parâmetros, e o TypeScript não pode ajudar — todos têm o mesmo tipo. Reordenar o

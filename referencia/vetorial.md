@@ -119,7 +119,3 @@ Em Qdrant 1.12+, o índice usa `is_tenant`, que co-loca os pontos do mesmo datas
 em disco. Em versões anteriores cai para o índice simples — funciona igual, sem
 essa otimização.
 
-::: tip `datasets` está deprecado
-O campo `datasets` das credenciais não é mais usado e sai na 0.5.0. Pode remover
-da sua config sem mudar nada.
-:::
