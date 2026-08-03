@@ -65,6 +65,24 @@ injeção por tipo compilaria e quebraria em silêncio no `npm start`.
 
 As chamadas dos decorators, por outro lado, são emitidas nos dois caminhos.
 
+## Se você não declarar estado
+
+Declarar `state` no `@Workflow` é opcional. Quem não usa não paga nada:
+
+| Situação | O que acontece |
+| --- | --- |
+| ninguém pede estado | funciona normal |
+| um agente pede com `@state()` | erro apontando a classe e o parâmetro |
+| uma tool pede com `@state()` | erro apontando o método e o parâmetro |
+| o `until` declara o 2º parâmetro | erro dizendo para acrescentar `state` |
+
+O último é detectado **antes de rodar**, pela quantidade de parâmetros que o
+`until` declara. Sem essa checagem, o estado chegaria `undefined` e o erro sairia
+como um `TypeError` na primeira leitura de campo — sem dizer o que faltou.
+
+Um `until` de um parâmetro só (`untilAnswered`, ou `(ctx) => …`) nunca dispara
+essa checagem.
+
 ## Erros
 
 Injeção que não pode ser satisfeita falha na hora, apontando a classe e o índice do
