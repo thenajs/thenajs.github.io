@@ -65,3 +65,54 @@ iguais, você grava na collection errada em silêncio.
 
 Vários stores fazem sentido quando são incompatíveis entre si — tipicamente
 modelos de embedding de dimensões diferentes, que não cabem na mesma collection.
+
+## O que o `bootstrapWorkflow` devolve
+
+Um `app` com três métodos.
+
+```ts
+const app = await bootstrapWorkflow(MeuWorkflow, config);
+```
+
+### `app.run(options)`
+
+Executa o workflow. Devolve a saída do último passo.
+
+```ts
+await app.run({
+  input: { message: "Olá" },
+  memory: { userId: "123" },   // contexto inicial
+  budget: { maxSeconds: 60 },  // teto da execução
+});
+```
+
+Pode ser chamado mais de uma vez no mesmo `app` — cada chamada é uma execução
+independente, com um estado novo.
+
+### `app.use(plugin)`
+
+Acopla um observador do stream de execução. Chame **antes** do `run`.
+
+```ts
+await app.use(thenaFlow());
+```
+
+Vários plugins convivem, e nenhum toma o lugar do `log` do config — todos
+recebem os mesmos eventos. Se o `setup` do plugin lançar, o `use()` rejeita:
+falha de configuração aparece antes da execução, não no meio dela.
+
+A interface é pequena de propósito, para você escrever a sua — está em
+[Ver a execução ao vivo](/guias/flow#o-mesmo-stream-para-onde-voce-quiser).
+
+### `app.dispose()`
+
+Encerra os plugins e solta a instrumentação.
+
+```ts
+await app.run({ input: { message: "Olá" } });
+await app.dispose();
+```
+
+Sem plugins, não é obrigatório — o processo termina sozinho. Com o
+[Flow](/guias/flow), é o que fecha o servidor: sem isso o site fica no ar de
+propósito, para dar tempo de olhar o resultado.

@@ -90,6 +90,10 @@ Se preferir instalar num projeto que já existe, em vez de usar o CLI:
 npm install @thenajs/core @thenajs/tools zod
 ```
 
+Os outros pacotes são opcionais: `@thenajs/qdrant-client` para
+[memória vetorial](/guias/memoria-vetorial) e `@thenajs/flow` para
+[ver a execução ao vivo](/guias/flow).
+
 E habilite decorators no `tsconfig.json`:
 
 ```json
