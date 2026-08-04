@@ -28,7 +28,7 @@ Um agente sem ferramentas só conversa. Vamos dar a ele a capacidade de ler
 arquivos — `src/tools/ler-arquivo.tool.ts`:
 
 ```ts
-import { Tool } from "@thenajs/core";
+import { Tool, input } from "@thenajs/core";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 
@@ -40,7 +40,7 @@ import { z } from "zod";
   }),
 })
 export class LerArquivoTool {
-  async execute({ caminho }: { caminho: string }) {
+  async execute(@input() { caminho }: { caminho: string }) {
     return readFile(caminho, "utf8");
   }
 }
@@ -52,12 +52,13 @@ Três coisas importam aqui:
   ferramenta — escreva pensando nele, não em você.
 - **`schema`** é a fronteira de confiança. O framework valida os argumentos que o
   modelo inventou **antes** de chamar seu `execute`. Mantenha estrito.
-- **`execute`** recebe os argumentos já validados. Nada de `if` para descobrir se
-  o modelo chamou a ferramenta, nem qual — isso é do framework.
+- **`@input()`** marca o parâmetro que recebe os argumentos já validados. Nada de
+  `if` para descobrir se o modelo chamou a ferramenta, nem qual — isso é do
+  framework.
 
-Esse é o formato mais simples, e o que você vai usar na maior parte das vezes. Uma
-ferramenta que precise de mais — do contexto da execução, ou do estado do
-workflow — [declara isso nos parâmetros](/referencia/injecao).
+Cada parâmetro declara o que quer, então a ordem nunca importa. Além do
+`@input()`, uma ferramenta pode pedir `@context()` (o contexto da execução) e
+`@state()` (o estado do workflow) — veja [Injeção](/referencia/injecao).
 
 ## 3. O agente
 

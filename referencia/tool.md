@@ -9,7 +9,7 @@ Registra uma classe como ferramenta. A lógica fica em `execute`.
   schema: z.object({ caminho: z.string() }),
 })
 export class LerArquivoTool {
-  async execute({ caminho }: { caminho: string }) {
+  async execute(@input() { caminho }: { caminho: string }) {
     return readFile(caminho, "utf8");
   }
 }
@@ -25,22 +25,22 @@ export class LerArquivoTool {
 
 ## `execute`
 
-```ts
-execute(args: any): string | ToolOutput | Promise<string | ToolOutput>
-```
-
-Recebe os argumentos **já validados** pelo schema.
-
-Para receber mais que isso, decore os parâmetros — veja
-[Injeção](/referencia/injecao):
+Os parâmetros são declarados com [decorators de injeção](/referencia/injecao) —
+cada um diz o que quer, e a ordem não importa:
 
 ```ts
 async execute(
-  @input() args: { caminho: string },
-  @context() ctx: AgentContext,
-  @state() s: RevisaoState,
-) {}
+  @input() args: { caminho: string },   // os argumentos já validados pelo schema
+  @context() ctx: AgentContext,          // o contexto da execução
+  @state() s: RevisaoState,              // o estado do workflow
+): string | ToolOutput | Promise<string | ToolOutput>
 ```
+
+Só o `@input()` é comum; os outros dois são para quando a ferramenta precisa de
+algo do fluxo.
+
+Um `execute` **sem decorator nenhum** recebe os argumentos no primeiro parâmetro —
+o formato de antes da 0.5.0, mantido por compatibilidade.
 
 ```ts
 type ToolOutput = {

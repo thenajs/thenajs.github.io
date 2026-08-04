@@ -5,7 +5,7 @@ argumentos aceita; o framework cuida de oferecê-la ao modelo, entender que ele 
 usá-la, validar o que ele mandou e chamar seu código.
 
 ```ts
-import { Tool } from "@thenajs/core";
+import { Tool, input } from "@thenajs/core";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 
@@ -17,7 +17,7 @@ import { z } from "zod";
   }),
 })
 export class LerArquivoTool {
-  async execute({ caminho }: { caminho: string }) {
+  async execute(@input() { caminho }: { caminho: string }) {
     return readFile(caminho, "utf8");
   }
 }
@@ -56,16 +56,7 @@ Mantenha estrito. Um `z.string()` genérico deixa passar coisa que um
 
 ## O que o `execute` recebe
 
-Por padrão, só o objeto já validado pelo schema:
-
-```ts
-async execute({ caminho }: { caminho: string }) {
-  return readFile(caminho, "utf8");
-}
-```
-
-É o caso comum, e mantém a tool trivial de testar. Quando ela precisa de mais, os
-parâmetros dizem o que querem — e a ordem não importa:
+Cada parâmetro declara o que quer, então a ordem não importa:
 
 ```ts
 import { Tool, input, context, state } from "@thenajs/core";
@@ -80,11 +71,18 @@ async execute(
 }
 ```
 
-::: tip Use com parcimônia
-Uma tool que lê o contexto deixa de ser testável isoladamente. O caso que mais
-justifica é repassar informação a um [sub-workflow](/guias/sub-agente), que roda
-isolado e começaria sem saber o que foi pedido.
+O `@input()` sozinho cobre a maioria dos casos. Os outros dois são para quando a
+ferramenta precisa de algo do fluxo.
+
+::: tip Peça só o que usar
+Uma tool que lê o contexto deixa de ser testável isoladamente — você passa a
+precisar de uma execução para exercitá-la. O caso que mais justifica é repassar
+informação a um [sub-workflow](/guias/sub-agente), que roda isolado e começaria
+sem saber o que foi pedido.
 :::
+
+Um `execute` sem decorator nenhum continua funcionando e recebe os argumentos —
+é o formato de antes da 0.5.0, mantido por compatibilidade.
 
 ## Sinalizar que deu errado
 
@@ -92,7 +90,7 @@ Devolver uma string é o caminho normal. Para marcar que a observação é um er
 sem derrubar a execução — devolva um objeto:
 
 ```ts
-async execute({ caminho }: { caminho: string }) {
+async execute(@input() { caminho }: { caminho: string }) {
   try {
     return await readFile(caminho, "utf8");
   } catch (err) {
@@ -119,7 +117,7 @@ Corte antes de devolver:
 ```ts
 const LIMITE = 4000;
 
-async execute({ caminho }: { caminho: string }) {
+async execute(@input() { caminho }: { caminho: string }) {
   const conteudo = await readFile(caminho, "utf8");
   return conteudo.length <= LIMITE
     ? conteudo
@@ -144,8 +142,8 @@ import { DeployWorkflow } from "../workflows/deploy.workflow.js";
 export class DeployTool {
   constructor(private readonly runtime: WorkflowRuntime) {}
 
-  async execute(input: { repositorio: string }) {
-    return this.runtime.run(DeployWorkflow, { input });
+  async execute(@input() args: { repositorio: string }) {
+    return this.runtime.run(DeployWorkflow, { input: args });
   }
 }
 ```

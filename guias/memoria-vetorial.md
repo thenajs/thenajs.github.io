@@ -118,7 +118,7 @@ O framework não injeta contexto sozinho. As duas formas comuns:
 export class BuscarTool {
   constructor(private readonly memory: VectorMemory) {}
 
-  async execute({ pergunta }: { pergunta: string }) {
+  async execute(@input() { pergunta }: { pergunta: string }) {
     const achados = await this.mem.recall(pergunta, { limit: 5 });
     return achados.length
       ? achados.map((a) => `[${a.score.toFixed(2)}] ${a.text}`).join("\n")

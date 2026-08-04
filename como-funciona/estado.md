@@ -145,7 +145,7 @@ Por padrão, o `execute` recebe **só os argumentos validados** — a tool é um
 função pura do ponto de vista do fluxo, e isso a mantém trivial de testar:
 
 ```ts
-async execute({ caminho }: { caminho: string }) {
+async execute(@input() { caminho }: { caminho: string }) {
   return readFile(caminho, "utf8");
 }
 ```

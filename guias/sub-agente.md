@@ -30,7 +30,7 @@ import { DeployWorkflow } from "../workflows/deploy.workflow.js";
 export class DeployTool {
   constructor(private readonly runtime: WorkflowRuntime) {}
 
-  async execute(input: { repositorio: string }) {
+  async execute(@input() args: { repositorio: string }) {
     return this.runtime.run(DeployWorkflow, {
       input: { message: `Faça o deploy de ${input.repositorio}` },
       memory: { ambiente: "staging" },   // contexto explícito para o filho
