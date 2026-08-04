@@ -20,6 +20,11 @@ const app = await bootstrapWorkflow(MeuWorkflow, config);
 
 Rode e abra `report/index.html`.
 
+::: tip Para ver enquanto acontece
+O report é o depois. Para acompanhar a execução em tempo real, num grafo no
+navegador, veja [Ver a execução ao vivo](/guias/flow).
+:::
+
 ## Ao vivo, no terminal
 
 ```

@@ -34,7 +34,7 @@ features:
 
   - icon: 🔍
     title: Nada de caixa-preta
-    details: Um report em HTML mostra a árvore da execução — o que foi enviado ao modelo, o que ele decidiu, quanto custou.
+    details: Um report em HTML mostra a árvore da execução — o que foi enviado ao modelo, o que ele decidiu, quanto custou. E o Flow desenha tudo isso ao vivo, enquanto roda.
     link: /guias/report
     linkText: Ver o report
 ---
