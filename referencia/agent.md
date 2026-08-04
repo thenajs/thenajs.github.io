@@ -37,8 +37,20 @@ não na execução.
 
 ## Injeção no construtor
 
-O construtor recebe, em ordem, uma `VectorMemory` para cada store registrado em
-[`ThenaConfig.memory`](/referencia/config):
+Declare nos parâmetros o que o agente precisa — veja
+[Injeção](/referencia/injecao):
+
+```ts
+export class MeuAgente {
+  constructor(
+    @state() private readonly s: RevisaoState,
+    @memory(QdrantOpenAI) private readonly mem: VectorMemory,
+  ) {}
+}
+```
+
+Sem decorator, vale o contrato posicional: uma `VectorMemory` para cada store
+registrado em [`ThenaConfig.memory`](/referencia/config), na ordem do array.
 
 ```ts
 export class MeuAgente {

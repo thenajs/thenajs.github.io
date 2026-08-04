@@ -16,6 +16,7 @@ Esta página é a lista completa. Se algo acontece sem você mandar, está aqui.
 | **executar a ferramenta e devolver o resultado** | hooks `beforeTool` / `afterTool` |
 | anexar cada turno ao histórico | `ctx.state` é público e editável |
 | repetir enquanto o `until` do loop não for verdadeiro | você escreve o `until` |
+| criar o estado do workflow, um por execução | você declara a classe em `@Workflow({ state })` |
 | tentar de novo em falha transitória de rede | `retry` no provider |
 | gravar a árvore da execução | `report` e `log` no config |
 
@@ -90,6 +91,8 @@ Do mais leve ao mais invasivo:
 | transformar o resultado de uma ferramenta | hook `afterTool` |
 | transformar a resposta do agente | hook `afterResponse` |
 | tratar erro sem derrubar | hook `onError` |
+| receber o contexto ou o estado numa tool | `@context()`, `@state()` nos parâmetros |
+| escolher qual memória vetorial | `@memory(Store)` no construtor |
 | mexer no histórico e no contexto | `ctx.state`, público |
 | controlar o laço | o `until` do `loop` |
 | falar com outro backend | escrever um provider |

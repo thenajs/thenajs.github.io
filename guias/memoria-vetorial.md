@@ -50,11 +50,11 @@ Quem quer memória pede no construtor — como as tools fazem com o `WorkflowRun
 ```ts
 @Agent({ provider: LocalOllamaProvider, prompt: "./assistente.agent.md" })
 export class AssistenteAgent {
-  constructor(private readonly memory: VectorMemory) {}
+  constructor(@memory() private readonly mem: VectorMemory) {}
 
   async beforePrompt(prompt: string, ctx: AgentContext) {
     const pergunta = ctx.state.history.at(-1)?.content ?? "";
-    const achados = await this.memory.recall(pergunta, { limit: 3 });
+    const achados = await this.mem.recall(pergunta, { limit: 3 });
 
     if (!achados.length) return;
 
@@ -62,12 +62,19 @@ export class AssistenteAgent {
   }
 
   async afterResponse(resposta: string) {
-    await this.memory.remember(resposta);
+    await this.mem.remember(resposta);
   }
 }
 ```
 
 Agentes que não usam memória simplesmente não escrevem construtor.
+
+Com **mais de um store** registrado, aponte qual você quer pela classe — assim a
+ordem do array em `ThenaConfig.memory` deixa de importar:
+
+```ts
+constructor(@memory(QdrantOpenAI) private readonly mem: VectorMemory) {}
+```
 
 Os embeddings saem do `provider` do próprio agente. Aponte um modelo dedicado:
 
@@ -112,7 +119,7 @@ export class BuscarTool {
   constructor(private readonly memory: VectorMemory) {}
 
   async execute({ pergunta }: { pergunta: string }) {
-    const achados = await this.memory.recall(pergunta, { limit: 5 });
+    const achados = await this.mem.recall(pergunta, { limit: 5 });
     return achados.length
       ? achados.map((a) => `[${a.score.toFixed(2)}] ${a.text}`).join("\n")
       : "Nada encontrado.";

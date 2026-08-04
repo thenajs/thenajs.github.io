@@ -41,6 +41,32 @@ export class DeployTool {
 
 O filho começa com estado novo: só recebe o que você passou em `input` e `memory`.
 
+Isso é bom — o ruído dele não polui o pai — e tem um custo: ele começa sem saber o
+que foi pedido. Se precisar repassar algo da conversa do pai, peça o contexto:
+
+```ts
+import { Tool, WorkflowRuntime, input, context } from "@thenajs/core";
+
+export class DeployTool {
+  constructor(private readonly runtime: WorkflowRuntime) {}
+
+  async execute(
+    @input() { repositorio }: { repositorio: string },
+    @context() ctx: AgentContext,
+  ) {
+    const pedido = ctx.state.history.find((m) => m.role === "user")?.content;
+
+    return this.runtime.run(DeployWorkflow, {
+      input: { message: `Faça o deploy de ${repositorio}` },
+      memory: { pedidoOriginal: pedido },
+    });
+  }
+}
+```
+
+É o caso de uso central do [`@context()`](/referencia/injecao): você escolhe o que
+atravessa o isolamento, em vez de tudo ou nada.
+
 ## Step ou tool? O guia de decisão
 
 É a escolha arquitetural central de um workflow, e as duas formas parecem

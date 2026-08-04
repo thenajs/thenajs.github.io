@@ -52,8 +52,12 @@ Três coisas importam aqui:
   ferramenta — escreva pensando nele, não em você.
 - **`schema`** é a fronteira de confiança. O framework valida os argumentos que o
   modelo inventou **antes** de chamar seu `execute`. Mantenha estrito.
-- **`execute`** recebe os argumentos já validados. Só isso — nada de contexto,
-  nada de `if` para saber se foi chamado.
+- **`execute`** recebe os argumentos já validados. Nada de `if` para descobrir se
+  o modelo chamou a ferramenta, nem qual — isso é do framework.
+
+Esse é o formato mais simples, e o que você vai usar na maior parte das vezes. Uma
+ferramenta que precise de mais — do contexto da execução, ou do estado do
+workflow — [declara isso nos parâmetros](/referencia/injecao).
 
 ## 3. O agente
 
